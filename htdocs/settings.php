@@ -36,6 +36,9 @@ if($debug == "true") {
         <a href="#backup" class="xbtn xbtn-default ">
         <i class='mdi mdi-content-save'></i> Sicherung
         </a> |
+        <a href="#update" class="xbtn xbtn-default ">
+        <i class='mdi mdi-cloud-download'></i> Update
+        </a> |
         <a href="#language" class="xbtn xbtn-default ">
         <i class='mdi mdi-emoticon'></i> <?php print $lang['globalLanguageSettings']; ?>
         </a> |
@@ -142,6 +145,54 @@ if($debug == "true") {
     </div><!-- /.panel-body -->
   </div><!-- /.panel -->
 </div><!-- /.panel-group -->
+
+<div class="panel-group">
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      <h4 class="panel-title"><a name="update"></a>
+        <i class="mdi mdi-cloud-download"></i> Software-Update
+      </h4>
+    </div><!-- /.panel-heading -->
+    <div class="panel-body">
+      <p class="text-muted">
+        Holt Verbesserungen aus deinem GitHub-Repo. Deine Einstellungen, LED-Konfiguration und
+        Karten bleiben unber&uuml;hrt (vorher wird automatisch gesichert). Es wird nur &bdquo;vorgespult&ldquo;,
+        nie etwas erzwungen.
+      </p>
+      <a href="#" id="updCheck" class="btn btn-info"><i class="mdi mdi-magnify"></i> Nach Updates suchen</a>
+      <a href="#" id="updApply" class="btn btn-warning" style="display:none;"><i class="mdi mdi-cloud-download"></i> Jetzt aktualisieren</a>
+      <pre id="updOut" style="display:none; margin-top:10px; white-space:pre-wrap; word-break:break-word;"></pre>
+    </div><!-- /.panel-body -->
+  </div><!-- /.panel -->
+</div><!-- /.panel-group -->
+
+<script>
+(function(){
+  var out=document.getElementById('updOut'),
+      chk=document.getElementById('updCheck'),
+      app=document.getElementById('updApply');
+  function show(t){ out.style.display='block'; out.textContent=t; }
+  chk.addEventListener('click', function(e){
+    e.preventDefault(); show('Suche nach Updates...');
+    fetch('api/update_api.php?action=check',{cache:'no-store'})
+      .then(function(r){return r.text();})
+      .then(function(t){
+        show(t.replace(/^STATUS:\w+\n?/,''));
+        app.style.display = /^STATUS:available/.test(t) ? 'inline-block' : 'none';
+      })
+      .catch(function(){ show('Fehler bei der Suche.'); });
+  });
+  app.addEventListener('click', function(e){
+    e.preventDefault();
+    if(!confirm('Update jetzt installieren? Einige Dienste werden dabei kurz neu gestartet.')) return;
+    show('Aktualisiere...');
+    fetch('api/update_api.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=apply',cache:'no-store'})
+      .then(function(r){return r.text();})
+      .then(function(t){ show(t); app.style.display='none'; })
+      .catch(function(){ show('Fehler beim Update.'); });
+  });
+})();
+</script>
 
 <div class="panel-group">
   <div class="panel panel-default">
