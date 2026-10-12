@@ -129,7 +129,18 @@ resume)
                 # echo -e seek $PLAYLISTPOS $ELAPSED \\nclose | nc -w 1 localhost 6600
                 # workaround, see https://github.com/MiczFlor/RPi-Jukebox-RFID/issues/878#issuecomment-672283454
                 echo -e "play $PLAYLISTPOS" | nc -w 1 localhost 6600
-                echo -e seekcur $ELAPSED \\nclose | nc -w 1 localhost 6600
+                # NEU: Bei HTTP-Streams (Podcasts) ist der Titel erst seekbar, sobald MPD die
+                # Verbindung geoeffnet und zu puffern begonnen hat. Ein sofortiges seekcur scheitert
+                # sonst mit "ACK ... Not seekable" (nach dem Booten bei kaltem Netzwerk zuverlaessig)
+                # und die Wiedergabe bliebe am Anfang -> Symptom: erste Podcast-Karte startet von vorne.
+                # Deshalb seekcur wiederholen, bis es greift (keine ACK-Fehlerantwort) - max ~10s.
+                # Lokale Dateien sind sofort seekbar -> Schleife bricht schon beim 1. Versuch ab.
+                for _resumeseektry in $(seq 1 20); do
+                    SEEKRESULT=$(echo -e "seekcur $ELAPSED\nclose" | nc -w 1 localhost 6600)
+                    if [ -n "$SEEKRESULT" ] && ! echo "$SEEKRESULT" | grep -q "ACK"; then break; fi
+                    sleep 0.5
+                done
+                if [ "${DEBUG_resume_play_sh}" == "TRUE" ]; then echo "  seekcur $ELAPSED nach $_resumeseektry Versuch(en): $SEEKRESULT" >> $PATHDATA/../logs/debug.log; fi
             else
                 echo -e "play $VALUE" | nc -w 1 localhost 6600
             fi

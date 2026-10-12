@@ -125,6 +125,19 @@ if($post['delete'] == "delete") {
     * error check
     */
 
+    /*
+    * NEU (Unterordner-Support fuer Streams/Podcasts):
+    * Wenn ein Stream mit AUSGEWAEHLTEM Ordner (= Eltern, $post['audiofolder'])
+    * UND neuem Namen ($post['audiofolderNew']) kommt, beides zu "Eltern/Neu"
+    * kombinieren und 'audiofolder' NICHT mehr als separate (kollidierende) Aktion
+    * werten. So laesst sich ein Stream in einen Unterordner legen.
+    * (mkdir -p legt den Unterordner an, das Shortcut speichert den relativen Pfad.)
+    */
+    if(isset($post['streamURL']) && isset($post['audiofolder']) && isset($post['audiofolderNew'])) {
+        $post['audiofolderNew'] = trim(trim($post['audiofolder']), '/')."/".trim(trim($post['audiofolderNew']), '/');
+        unset($post['audiofolder']);
+    }
+
     // posted too little?
     if(
         (!isset($post['streamURL']) || !isset($post['streamType']))

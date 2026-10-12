@@ -2,6 +2,17 @@
 import configparser
 import os
 import logging
+import signal
+import sys
+
+def signal_handler(sig, frame):
+    """Cleanup beim Beenden"""
+    print("\nCleaning up GPIO...")
+    GPIO.cleanup()
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 from signal import pause
 from RPi import GPIO

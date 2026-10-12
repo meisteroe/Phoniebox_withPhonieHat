@@ -46,6 +46,7 @@ function execMPDCommand($command) {
     socket_write($socket, $command, strlen($command));
     socket_shutdown ($socket,1);
     $output = array();
+    $outputTemp = "";
     while ($out = socket_read($socket, 2048)) {
          $outputTemp .= $out;
     }

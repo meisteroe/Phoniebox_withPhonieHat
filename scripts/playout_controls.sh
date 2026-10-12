@@ -639,6 +639,8 @@ case $COMMAND in
         # stop the player
         if [ "${DEBUG_playout_controls_sh}" == "TRUE" ]; then echo "   ${COMMAND}" >> ${PATHDATA}/../logs/debug.log; fi
         ${PATHDATA}/resume_play.sh -c=savepos && mpc stop
+        # NEU: evtl. aktiven Aufnahme-Lautstaerke-Boost zuruecknehmen (Stop/Kartenwechsel)
+        ${PATHDATA}/custom_recording_volume.sh restore
         #if [ -e $AUDIOFOLDERSPATH/playing.txt ]
         #then
         #    sudo rm $AUDIOFOLDERSPATH/playing.txt
@@ -940,6 +942,13 @@ case $COMMAND in
         if [ "${DEBUG_playout_controls_sh}" == "TRUE" ]; then echo "  echo ${FOLDER} > ${PATHDATA}/../settings/Latest_Folder_Played" >> ${PATHDATA}/../logs/debug.log; fi
         if [ "${DEBUG_playout_controls_sh}" == "TRUE" ]; then echo "  VAR Latest_Folder_Played: ${FOLDER}" >> ${PATHDATA}/../logs/debug.log; fi
         if [ "${DEBUG_playout_controls_sh}" == "TRUE" ]; then echo "  # end playout_controls.sh playlistaddplay" >> ${PATHDATA}/../logs/debug.log; fi
+
+        # NEU: Aufnahme-Karten (+15%) lauter abspielen; am Ende/bei Wechsel wieder zurueck.
+        if [[ "${FOLDER}" == Recordings/Recording_* ]]; then
+            ${PATHDATA}/custom_recording_volume.sh apply
+        else
+            ${PATHDATA}/custom_recording_volume.sh restore
+        fi
 
         # OLD VERSION (pre 20190302 - delete once the new version really seems to work):
         # call shuffle_check HERE to enable/disable folder-based shuffling

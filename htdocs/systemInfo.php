@@ -78,8 +78,60 @@ $rpi_throttle = checkRpiThrottle();
         <div class="row">	
           <label class="col-md-4 control-label" for=""><?php print $lang['globalDescription']; ?></label> 
           <div class="col-md-6"><?php echo trim($description); ?></div>
+		   </div><!-- / row -->
+
+        <!-- Phoniebox-Softwareversion -->
+        <div class="row">
+          <label class="col-md-4 control-label" for="">Phoniebox-Software</label>
+          <div class="col-md-6">
+          <?php
+            $pbVer  = @file_get_contents('../VERSION');
+            $pbVer  = ($pbVer !== false && trim($pbVer) !== '') ? trim($pbVer) : 'unbekannt';
+            $pbDate = @filemtime('../VERSION');
+            echo '<strong>'.htmlspecialchars($pbVer).'</strong> &ndash; Custom HAT Edition';
+            if ($pbDate) { echo '<br><small class="text-muted">Stand: '.date('d.m.Y', $pbDate).'</small>'; }
+          ?>
+          </div>
         </div><!-- / row -->
-        <div class="row">	
+
+        <!-- Battery Status -->
+        <?php
+        $batteryFile = '/tmp/battery_status.json';
+        if (file_exists($batteryFile)) {
+            $battery = json_decode(file_get_contents($batteryFile), true);
+            if ($battery && isset($battery['percent'])) {
+                $percent = $battery['percent'];
+                $voltage = $battery['voltage'];
+                $status = $battery['status'];
+                
+                // Farbe je nach Status
+                if ($percent > 80) {
+                    $barColor = 'success';
+                    $icon = '🔋';
+                } elseif ($percent > 20) {
+                    $barColor = 'info';
+                    $icon = '🔋';
+                } elseif ($percent > 10) {
+                    $barColor = 'warning';
+                    $icon = '⚡';
+                } else {
+                    $barColor = 'danger';
+                    $icon = '⚠️';
+                }
+                
+                echo '<div class="row" style="margin-bottom:15px;">';
+                echo '<label class="col-md-4 control-label">Battery</label>';
+                echo '<div class="col-md-6">';
+                echo $icon . ' ' . $percent . '% (' . $voltage . 'V)';
+                echo '<div class="progress" style="margin-top:5px; margin-bottom:0;">';
+                echo '<div class="progress-bar progress-bar-' . $barColor . '" style="width:' . $percent . '%"></div>';
+                echo '</div>';
+                echo '</div>';
+                echo '</div><!-- / row -->';
+            }
+        }
+        ?> 
+		<div class="row">		
           <label class="col-md-4 control-label" for=""><?php print $lang['globalRelease']; ?></label> 
           <div class="col-md-6"><?php echo trim($release); ?></div>
         </div><!-- / row -->
@@ -234,8 +286,177 @@ $exec = "df -H -B K / ";
 </div><!-- /.panel-group -->
 
 <?php
+/* === Dokumentation: Ordner ../Doku rekursiv auflisten (Unterordner aufklappbar) === */
+$dokuDir = __DIR__ . '/../Doku';
+
+if (!function_exists('renderDokuNode')) {
+  function renderDokuNode($absDir, $relDir) {
+    $allowed  = array('pdf','html','htm','md','txt','png','jpg','jpeg','gif','svg','stl','3mf','obj','step','stp','zip');
+    $download = array('stl','3mf','obj','step','stp','zip');
+    $entries = glob($absDir . '/*');
+    if ($entries === false) { return; }
+    usort($entries, 'strcasecmp');
+    $files = array(); $dirs = array();
+    foreach ($entries as $e) {
+      if (is_dir($e)) { $dirs[] = $e; }
+      elseif (is_file($e)) { $files[] = $e; }
+    }
+    // Unterordner zuerst (aufklappbar), danach die Dateien
+    foreach ($dirs as $d) {
+      $dname  = basename($d);
+      $relSub = ($relDir === '' ? '' : $relDir . '/') . $dname;
+      $cid    = 'doku_' . substr(md5($relSub), 0, 10);
+      $cnt    = count((array)glob($d . '/*'));
+      print '        <a href="#' . $cid . '" data-toggle="collapse" class="list-group-item" style="font-weight:600"><i class="mdi mdi-folder-outline"></i> ' . htmlspecialchars($dname) . ' <span class="badge">' . $cnt . '</span></a>' . "\n";
+      print '        <div class="collapse" id="' . $cid . '" style="padding-left:20px;border-left:2px solid #eee;margin:2px 0 2px 6px">' . "\n";
+      renderDokuNode($d, $relSub);
+      print '        </div>' . "\n";
+    }
+    foreach ($files as $f) {
+      $name = basename($f);
+      $ext  = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+      if (!in_array($ext, $allowed)) { continue; }
+      $title = pathinfo($name, PATHINFO_FILENAME);
+      $rel   = ($relDir === '' ? '' : $relDir . '/') . $name;
+      $dl    = in_array($ext, $download) ? '&dl=1' : '';
+      if ($ext === 'pdf') { $icon = 'mdi-file-pdf'; }
+      elseif (in_array($ext, array('stl','3mf','obj','step','stp'))) { $icon = 'mdi-cube-outline'; }
+      elseif (in_array($ext, array('png','jpg','jpeg','gif','svg'))) { $icon = 'mdi-file-image'; }
+      elseif ($ext === 'zip') { $icon = 'mdi-folder-zip-outline'; }
+      else { $icon = 'mdi-file-document-outline'; }
+      print '        <a href="docViewer.php?doc=' . urlencode($rel) . $dl . '" target="_blank" class="list-group-item"><i class="mdi ' . $icon . '"></i> ' . htmlspecialchars($title) . ' <small class="text-muted">(' . strtoupper($ext) . ')</small></a>' . "\n";
+    }
+  }
+}
+?>
+<div class="panel-group">
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      <h4 class="panel-title">
+        <i class='mdi mdi-book-open-page-variant'></i> <?php print isset($lang['globalDocumentation']) ? $lang['globalDocumentation'] : 'Dokumentation'; ?>
+      </h4>
+    </div><!-- /.panel-heading -->
+    <div class="panel-body">
+      <div class="list-group">
+<?php
+        if (is_dir($dokuDir)) {
+            renderDokuNode($dokuDir, '');
+        } else {
+            print '        <p class="text-muted" style="padding:10px;">Ordner <code>Doku/</code> nicht gefunden.</p>' . "\n";
+        }
+?>
+      </div>
+    </div><!-- /.panel-body -->
+  </div><!-- /.panel panel-default-->
+</div><!-- /.panel-group -->
+
+<!-- Spende / Unterstuetzung -->
+<div class="panel-group">
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      <h4 class="panel-title">
+        <i class='mdi mdi-heart-outline'></i> Spende
+      </h4>
+    </div><!-- /.panel-heading -->
+    <div class="panel-body">
+      <p>Diese Phoniebox wurde mit viel Liebe von <strong>Adrian M&ouml;ller</strong> entwickelt und gebaut.
+      Wenn sie dich und deine Familie mit Freude erf&uuml;llt und du das Projekt unterst&uuml;tzen m&ouml;chtest,
+      freue ich mich sehr &uuml;ber eine kleine Spende &ndash; ganz so, wie es dir gef&auml;llt. Vielen Dank! &#128153;</p>
+      <a href="https://paypal.me/MeisterAdrian" target="_blank" rel="noopener" class="btn btn-info">
+        <i class="mdi mdi-gift-outline"></i> Per PayPal spenden
+      </a>
+    </div><!-- /.panel-body -->
+  </div><!-- /.panel panel-default-->
+</div><!-- /.panel-group -->
+
+<?php
 include("inc.addSystemInfo.php");
 ?>
+
+<!-- Live-Log (journald, liegt im RAM -> keine SD-Last) -->
+
+<div class="panel-group">
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      <h4 class="panel-title">
+        <i class='mdi mdi-console'></i> Live-Log (System &amp; Dienste)
+      </h4>
+    </div><!-- /.panel-heading -->
+    <div class="panel-body">
+
+      <div class="form-inline" style="margin-bottom:10px;">
+        <select id="liveLogSource" class="form-control" style="margin:2px;">
+          <option value="system">Gesamtes System</option>
+          <option value="pn532">RFID-Reader (pn532)</option>
+          <option value="gpio">Tasten / GPIO</option>
+          <option value="mpd">Player (MPD)</option>
+          <option value="led">LED-Steuerung</option>
+          <option value="battery">Akku-Monitor</option>
+          <option value="mpd-autoupdate">MPD Auto-Update</option>
+          <option value="idle">Auto-Abschaltung</option>
+          <option value="startup">Startskripte</option>
+        </select>
+        <select id="liveLogLines" class="form-control" style="margin:2px;">
+          <option value="50">50 Zeilen</option>
+          <option value="100" selected>100 Zeilen</option>
+          <option value="200">200 Zeilen</option>
+          <option value="500">500 Zeilen</option>
+        </select>
+        <label class="checkbox-inline" style="margin:2px 8px;">
+          <input type="checkbox" id="liveLogLive" checked> Live (3s)
+        </label>
+        <a href="#" id="liveLogRefresh" class="btn btn-info btn-sm" style="margin:2px;">
+          <i class="mdi mdi-refresh"></i> Aktualisieren
+        </a>
+      </div>
+
+      <pre id="liveLogOut" style="height:380px; overflow:auto; background:#1e1e1e; color:#d4d4d4; font-family:monospace; font-size:12px; white-space:pre-wrap; word-break:break-word; padding:10px; border-radius:4px; margin-bottom:6px;">Lade...</pre>
+      <small class="text-muted"><span id="liveLogStamp">&nbsp;</span> &middot; liest aus dem RAM (journald volatile) &ndash; belastet die SD-Karte nicht.</small>
+
+    </div><!-- /.panel-body -->
+  </div><!-- /.panel -->
+</div><!-- /.panel-group -->
+
+<script>
+(function(){
+  var pre    = document.getElementById('liveLogOut');
+  var src    = document.getElementById('liveLogSource');
+  var lines  = document.getElementById('liveLogLines');
+  var live   = document.getElementById('liveLogLive');
+  var stamp  = document.getElementById('liveLogStamp');
+  var timer  = null;
+  var first  = true;
+
+  function load(){
+    var url = 'api/log_api.php?source=' + encodeURIComponent(src.value)
+            + '&lines=' + encodeURIComponent(lines.value);
+    fetch(url, {cache:'no-store'})
+      .then(function(r){ return r.text(); })
+      .then(function(t){
+        var atBottom = first || (pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20);
+        pre.textContent = t;
+        if (atBottom) { pre.scrollTop = pre.scrollHeight; }
+        first = false;
+        var d = new Date();
+        stamp.textContent = 'Aktualisiert ' + d.toLocaleTimeString();
+      })
+      .catch(function(){ stamp.textContent = 'Fehler beim Laden'; });
+  }
+
+  function apply(){
+    if (timer) { clearInterval(timer); timer = null; }
+    if (live.checked) { timer = setInterval(load, 3000); }
+  }
+
+  src.addEventListener('change', function(){ first = true; load(); });
+  lines.addEventListener('change', function(){ first = true; load(); });
+  live.addEventListener('change', apply);
+  document.getElementById('liveLogRefresh').addEventListener('click', function(e){ e.preventDefault(); load(); });
+
+  load();
+  apply();
+})();
+</script>
 
 <!-- debug.log -->
 

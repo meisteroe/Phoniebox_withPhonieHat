@@ -58,8 +58,10 @@ echo "${mpgvolume} is the mpg123 startup volume"
 if [ "$EDITION" == "plusSpotify" ]; then
     sudo mopidyctl local scan > /dev/null 2>&1
 else
-    mpc rescan
-fi 
+    # mpc rescan  ← ENTFERNT: auto_update (mpd.conf) erkennt neue Dateien schon.
+    # Vorher lief beim Boot ein DOPPELTER, voller Re-Scan der 5,6GB → unnoetige SD-Last.
+    :
+fi
 
 #######################
 # read out wifi config?

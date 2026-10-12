@@ -407,6 +407,25 @@ function index_folders_print($item, $key)
     */
     // we show the buttons only if there are actual audio files in the folder
     if($contentTree[$key]['count_audioFiles'] == 0) {
+        // NEU: Podcast-Ordner haben (noch) keine lokalen Audiodateien, sollen aber eine
+        // Resume-Option bekommen (Folgen sind oft lang, z.B. Maus ~1h). NUR Resume -
+        // Shuffle/Single sind hier bewusst NICHT dabei.
+        if (in_array($contentTree[$key]['path_abs']."/podcast.txt", $contentTree[$key]['files'])) {
+            print "\n                <div><!-- settings buttons (podcast resume) -->";
+            $foundResume = "OFF";
+            if(
+                file_exists($contentTree[$key]['path_abs']."/folder.conf")
+                && strpos(file_get_contents($contentTree[$key]['path_abs']."/folder.conf"),'RESUME="ON"') !== false
+            ) {
+                $foundResume = "ON";
+            }
+            if( $foundResume == "OFF" ) {
+                print "<a playlist=\"$playlist\" resume='false' onclick='toggleResume(this);' class='btn btn-warning '>".$lang['globalResume'].": ".$lang['globalOff']." <i class='mdi mdi-toggle-switch-off-outline' aria-hidden='true'></i></a> ";
+            } elseif($foundResume == "ON") {
+                print "<a playlist=\"$playlist\" resume='true' onclick='toggleResume(this);' class='btn btn-success '>".$lang['globalResume'].": ".$lang['globalOn']." <i class='mdi mdi-toggle-switch' aria-hidden='true'></i></a> ";
+            }
+            print "\n                </div><!-- / settings buttons (podcast resume) -->";
+        }
     } else {
         print "\n                <div><!-- settings buttons -->";
         // RESUME BUTTON

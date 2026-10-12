@@ -1,4 +1,3 @@
-
 <?php
 /*
 * GLOBAL settings for behaviour of placing or swiping RFID cards to
@@ -6,7 +5,6 @@
 * SWIPENOTPLACE = Swiping starts the player
 * PLACENOTSWIPE = Placing the card starts player, removal stops it
 */
-
 if(isset($_POST['rfidSwipePlace']) && trim($_POST['rfidSwipePlace']) != "") {
     /*
     * make sure it is a value we can accept, do not just write whatever is in the POST
@@ -39,8 +37,17 @@ if(isset($_POST['rfidSwipePlace']) && trim($_POST['rfidSwipePlace']) != "") {
         print "<br>Swipe_or_Place: ".$Swipe_or_Place;
     }
 }
-?>
 
+// IMMER aus Datei lesen (überschreibt alten Wert)
+$settingsFile = '/home/pi/RPi-Jukebox-RFID/settings/Swipe_or_Place';
+if(file_exists($settingsFile)) {
+    $Swipe_or_Place = trim(file_get_contents($settingsFile));
+} else {
+    // Fallback wenn Datei nicht existiert
+    $Swipe_or_Place = "SWIPENOTPLACE";
+}
+
+?>
         <!-- input-group --> 
         <div class="col-md-6 col-sm-6">
               <h4><?php print $lang['settingsPlayoutBehaviourCardLabel']; ?></h4>

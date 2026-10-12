@@ -145,6 +145,22 @@ foreach($audiofolders as $audiofolder) {
 			w3RemoveClass(x[i], "filtershow");
 			if (x[i].className.indexOf(c) > -1) w3AddClass(x[i], "filtershow");
 		  }
+
+          // NEU: Podcasts/Streams in Unterordnern unter dem Tab sichtbar machen -
+          // zu jedem Treffer die uebergeordneten Panels nur EINBLENDEN, NICHT aufklappen.
+          // So bleibt alles standardmaessig zugeklappt (uebersichtlich); man klappt das
+          // Eltern-Panel selbst auf, um zum Podcast/Stream im Unterordner zu gelangen.
+          if (c != "") {
+            for (i = 0; i < x.length; i++) {
+              if (x[i].className.indexOf(c) > -1) {
+                var pp = x[i].parentElement;
+                while (pp) {
+                  if (pp.className && (" "+pp.className+" ").indexOf(" filterDiv ") > -1) { w3AddClass(pp, "filtershow"); }
+                  pp = pp.parentElement;
+                }
+              }
+            }
+          }
 		}
 
 		function w3AddClass(element, name) {

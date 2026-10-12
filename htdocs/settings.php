@@ -30,6 +30,12 @@ if($debug == "true") {
         <a href="#RFID" class="xbtn xbtn-default ">
         <i class='mdi mdi-cards-outline'></i> <?php print $lang['globalRFIDCards']; ?>
         </a> |
+        <a href="#hostname" class="xbtn xbtn-default ">
+        <i class='mdi mdi-rename-box'></i> Ger&auml;tename
+        </a> |
+        <a href="#backup" class="xbtn xbtn-default ">
+        <i class='mdi mdi-content-save'></i> Sicherung
+        </a> |
         <a href="#language" class="xbtn xbtn-default ">
         <i class='mdi mdi-emoticon'></i> <?php print $lang['globalLanguageSettings']; ?>
         </a> |
@@ -83,6 +89,58 @@ if($debug == "true") {
       </div><!-- /.panel-body -->
 
     </div><!-- /.panel -->
+</div><!-- /.panel-group -->
+
+<div class="panel-group">
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      <h4 class="panel-title"><a name="hostname"></a>
+         <i class='mdi mdi-rename-box'></i> Ger&auml;tename
+      </h4>
+    </div><!-- /.panel-heading -->
+    <div class="panel-body">
+      <div class="row">
+<?php include("inc.setHostname.php"); ?>
+      </div><!-- /.row -->
+    </div><!-- /.panel-body -->
+  </div><!-- /.panel -->
+</div><!-- /.panel-group -->
+
+<div class="panel-group">
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      <h4 class="panel-title"><a name="backup"></a>
+         <i class='mdi mdi-content-save'></i> Sicherung &amp; Wiederherstellung
+      </h4>
+    </div><!-- /.panel-heading -->
+    <div class="panel-body">
+      <p class="text-muted">
+        Sichert <strong>Einstellungen</strong>, <strong>LED-Konfiguration</strong> und
+        <strong>Karten-Zuordnungen</strong> in eine Datei (ohne Medien und ohne WLAN-Zugangsdaten).
+        Ideal, um eine Box zu duplizieren oder vor &Auml;nderungen zu sichern.
+      </p>
+      <div class="row">
+        <div class="col-md-6" style="margin-bottom:10px;">
+          <h4>Sicherung herunterladen</h4>
+          <a href="api/backup_export.php" class="btn btn-primary">
+            <i class="mdi mdi-download"></i> Konfiguration sichern
+          </a>
+        </div>
+        <div class="col-md-6">
+          <h4>Sicherung wiederherstellen</h4>
+          <form method="post" action="api/backup_import.php" enctype="multipart/form-data" target="_blank"
+                onsubmit="return confirm('Aktuelle Einstellungen, LED-Konfiguration und Karten-Zuordnungen werden ueberschrieben (vorher wird automatisch eine Sicherheitskopie angelegt). Fortfahren?');">
+            <div class="input-group">
+              <input type="file" name="backupfile" accept=".gz,.tar.gz,application/gzip" class="form-control" required>
+              <span class="input-group-btn">
+                <input type="submit" class="btn btn-warning" value="Wiederherstellen">
+              </span>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div><!-- /.panel-body -->
+  </div><!-- /.panel -->
 </div><!-- /.panel-group -->
 
 <div class="panel-group">

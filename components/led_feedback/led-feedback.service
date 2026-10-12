@@ -1,0 +1,15 @@
+[Unit]
+Description=LED Feedback Controller v2 (SK9822)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pi/RPi-Jukebox-RFID/components/led_feedback
+ExecStart=/usr/bin/python3 led_controller.py
+Restart=always
+RestartSec=3
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

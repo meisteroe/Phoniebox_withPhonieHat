@@ -63,6 +63,18 @@ fi
 # see following file for details:
 . $PATHDATA/inc.readArgsFromCommandLine.sh
 
+# If a folder was explicitly passed via -d= (e.g. from WebUI),
+# clear CARDID so the conf-sourced CARDID does not hijack playback.
+for _arg in "$@"; do
+    case $_arg in
+        -d=*|--dir=*)
+            CARDID=""
+            break
+            ;;
+    esac
+done
+unset _arg
+
 #######################
 # Activation status of component sync-shared-from-server
 SYNCSHAREDENABLED="FALSE"

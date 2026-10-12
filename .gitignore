@@ -50,3 +50,25 @@ composer.phar
 # composer.lock
 
 # End of https://www.gitignore.io/api/composer
+
+# --- Custom HAT: boxspezifisch / nicht ins oeffentliche Repo ---
+.claude/
+backups/
+Doku/
+NxpNfcRdLib_PN5180_v07.14.00_Pub/
+shared/config-backups/
+shared/shortcuts/
+settings/
+
+# Experiment-/Backup-Skripte (bleiben lokal auf der Box)
+scripts/_backup_*
+scripts/*voraenderung*
+scripts/*vor energiesparen*
+scripts/apa102_libALT.py
+scripts/pn5180_*
+scripts/reader_pn5180.py
+scripts/dual_reader_pn5180.py
+scripts/pn532_reader.py
+scripts/setup_pn5180.sh
+components/gpio_control/function_callsDEFAULT.py
+components/led_feedback/led_settings.json

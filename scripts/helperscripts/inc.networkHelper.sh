@@ -87,22 +87,61 @@ add_wireless_network() {
     fi
 }
 
-# gets the configured wireless networks. Returns an array with the format "ssid:pass:prio ssid:pass:prio".
+# NEU: Wrapper, der SSID und Passwort base64-kodiert entgegennimmt. So kommen Sonderzeichen
+# (v.a. Leerzeichen, aber auch " $ ' usw.) sicher durch alle Shell-Ebenen
+# (WebUI -> sudo bash -c '...' -> Heredoc), ohne dass Wortsplitting die SSID abschneidet
+# (frueherer Bug: "costas Internetcafe" wurde beim Leerzeichen zu "costas").
+add_wireless_network_b64() {
+    local interface="$1"
+    local ssid; ssid=$(printf '%s' "$2" | base64 -d 2>/dev/null)
+    local pass; pass=$(printf '%s' "$3" | base64 -d 2>/dev/null)
+    local prio="$4"
+    add_wireless_network "$interface" "$ssid" "$pass" "$prio"
+}
+
+# NEU (Sicherheit): aktuelle wpa_supplicant.conf sichern, bevor die WebUI sie neu schreibt.
+backup_wpa_conf() {
+    if [[ $(is_dhcpcd_enabled) == true ]]; then
+        sudo cp -a "$WPA_CONF" "${WPA_CONF}.webui-bak" 2>/dev/null
+    fi
+    return 0
+}
+
+# NEU (Sicherheit): Falls die (base64-kodierte) SSID nach dem Neuschreiben NICHT mehr in der
+# Konfig steht, die Sicherung wiederherstellen. Schuetzt das aktuell verbundene Netz davor,
+# versehentlich zu verschwinden (sonst ginge der Fernzugriff auf das Geraet verloren).
+restore_wpa_conf_if_ssid_missing_b64() {
+    local ssid; ssid=$(printf '%s' "$1" | base64 -d 2>/dev/null)
+    [[ -z "$ssid" ]] && return 0
+    if [[ $(is_dhcpcd_enabled) == true ]] && [[ -f "${WPA_CONF}.webui-bak" ]]; then
+        if ! sudo grep -qF "ssid=\"${ssid}\"" "$WPA_CONF"; then
+            sudo cp -a "${WPA_CONF}.webui-bak" "$WPA_CONF"
+        fi
+    fi
+    return 0
+}
+
+# gets the configured wireless networks. Returns one network per line as
+# "base64(ssid):base64(psk):prio" (base64 keeps spaces and special chars intact).
 get_wireless_networks() {
     networks=()
 
     if [[ $(is_dhcpcd_enabled) == true ]]; then
-        local wpa_networks=$(sudo sed '/^network={/,/^}/!d' $WPA_CONF)
-        local wpa_networks_perline=$(echo "${wpa_networks//$'\n'/\\n}" | sed -e 's/[[:space:]]//g' -e 's/\\nnetwork=/\nnetwork=/g')
-        for wpa_network in $wpa_networks_perline
-        do
-            local wpa_network_multiline="${wpa_network//\\n/$'\n'}"
-            local ssid=$(echo "$wpa_network_multiline" | grep -F "ssid=" | cut -d = -f 2 | tr -d '"')
-            local pass=$(echo "$wpa_network_multiline" | grep -F "psk=" | cut -d = -f 2)
-            local prio=$(echo "$wpa_network_multiline" | grep -F "priority=" | cut -d = -f 2)
-
-            networks+=("$ssid":"$pass":"$prio")
-        done
+        # network={...}-Bloecke zeilenweise robust parsen; Leerzeichen in der SSID
+        # bleiben dabei erhalten (kein 's/[[:space:]]//g' mehr, das sie frueher zerstoerte).
+        local line ssid="" pass="" prio="0" inb=0
+        while IFS= read -r line; do
+            case "$line" in
+                *network=\{* ) inb=1; ssid=""; pass=""; prio="0" ;;
+                *\}* ) if [[ $inb -eq 1 ]]; then
+                           networks+=("$(printf '%s' "$ssid" | base64 -w0):$(printf '%s' "$pass" | base64 -w0):$prio")
+                           inb=0
+                       fi ;;
+                *ssid=* ) if [[ $inb -eq 1 ]]; then ssid="${line#*ssid=}"; ssid="${ssid#\"}"; ssid="${ssid%\"}"; fi ;;
+                *psk=* )  if [[ $inb -eq 1 ]]; then pass="${line#*psk=}"; pass="${pass#\"}"; pass="${pass%\"}"; fi ;;
+                *priority=* ) if [[ $inb -eq 1 ]]; then prio="${line#*priority=}"; prio="${prio//[[:space:]]/}"; fi ;;
+            esac
+        done < <(sudo cat "$WPA_CONF")
     fi
 
     if [[ $(is_NetworkManager_enabled) == true ]]; then
@@ -115,9 +154,9 @@ get_wireless_networks() {
             local pass=$(echo "$result" | grep -F "802-11-wireless-security.psk" | cut -d : -f 2)
             local prio=$(echo "$result" | grep -F "connection.autoconnect-priority" | cut -d : -f 2)
 
-            networks+=("$ssid":"$pass":"$prio")
+            networks+=("$(printf '%s' "$ssid" | base64 -w0):$(printf '%s' "$pass" | base64 -w0):$prio")
         done
     fi
 
-    echo "${networks[@]}"
+    printf '%s\n' "${networks[@]}"
 }
