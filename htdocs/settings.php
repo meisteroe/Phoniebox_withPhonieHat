@@ -39,6 +39,9 @@ if($debug == "true") {
         <a href="#update" class="xbtn xbtn-default ">
         <i class='mdi mdi-cloud-download'></i> Update
         </a> |
+        <a href="#contribute" class="xbtn xbtn-default ">
+        <i class='mdi mdi-source-pull'></i> Beitragen
+        </a> |
         <a href="#language" class="xbtn xbtn-default ">
         <i class='mdi mdi-emoticon'></i> <?php print $lang['globalLanguageSettings']; ?>
         </a> |
@@ -191,6 +194,116 @@ if($debug == "true") {
       .then(function(t){ show(t); app.style.display='none'; })
       .catch(function(){ show('Fehler beim Update.'); });
   });
+})();
+</script>
+
+<div class="panel-group">
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      <h4 class="panel-title"><a name="contribute"></a>
+        <i class="mdi mdi-source-pull"></i> Als Mit-Entwickler beitragen
+      </h4>
+    </div><!-- /.panel-heading -->
+    <div class="panel-body">
+      <p class="text-muted">
+        Hier kannst du eigene Verbesserungen als <strong>Vorschlag (Pull Request)</strong> einreichen.
+        Nichts wird direkt &uuml;bernommen &ndash; Adrian pr&uuml;ft jeden Vorschlag und entscheidet.
+      </p>
+
+      <div class="well well-sm" style="background:#f7f7f9;">
+        <strong>Einmalige Einrichtung:</strong>
+        <ol style="margin:8px 0 0 18px; padding:0;">
+          <li>Kostenloses <strong>GitHub-Konto</strong> erstellen auf <a href="https://github.com/signup" target="_blank">github.com/signup</a>.</li>
+          <li>Adrian deinen <strong>GitHub-Benutzernamen</strong> nennen &ndash; er l&auml;dt dich einmalig als Mitarbeiter ein.</li>
+          <li><strong>Zugangs-Token</strong> erstellen unter
+              <a href="https://github.com/settings/personal-access-tokens" target="_blank">github.com/settings/personal-access-tokens</a>
+              &rarr; &bdquo;Generate new token&ldquo;. Dort einstellen: <em>Repository access</em> = nur
+              <code>meisteroe/Phoniebox_withPhonieHat</code>, und unter <em>Permissions &rarr; Repository &rarr; Contents</em> =
+              <strong>Read and write</strong>. Token erzeugen und <strong>kopieren</strong> (wird nur einmal angezeigt!).</li>
+          <li>Unten <strong>Namen</strong> und den <strong>Token</strong> einf&uuml;gen und <strong>Speichern</strong>.</li>
+        </ol>
+      </div>
+
+      <div class="row">
+        <div class="col-md-8">
+          <div class="form-group">
+            <label>Dein Name (erscheint an den Commits)</label>
+            <input type="text" id="contribName" class="form-control" placeholder="z. B. Max Mustermann">
+          </div>
+          <div class="form-group">
+            <label>GitHub-Zugangs-Token</label>
+            <input type="password" id="contribToken" class="form-control" autocomplete="off" placeholder="github_pat_...">
+          </div>
+          <a href="#" id="contribSave" class="btn btn-default"><i class="mdi mdi-content-save"></i> Speichern</a>
+          <span id="contribStatus" class="text-muted" style="margin-left:10px;">&nbsp;</span>
+        </div>
+      </div>
+
+      <hr>
+
+      <p><strong>Vorschlag einreichen</strong> &ndash; verpackt deine aktuellen &Auml;nderungen in einen Pull Request:</p>
+      <div class="row">
+        <div class="col-md-8">
+          <div class="input-group">
+            <input type="text" id="contribDesc" class="form-control" placeholder="Kurz: was hast du geaendert?">
+            <span class="input-group-btn">
+              <a href="#" id="contribSubmit" class="btn btn-warning"><i class="mdi mdi-source-pull"></i> Vorschlag einreichen</a>
+            </span>
+          </div>
+        </div>
+      </div>
+      <pre id="contribOut" style="display:none; margin-top:10px; white-space:pre-wrap; word-break:break-word;"></pre>
+      <div id="contribLink" style="margin-top:8px;"></div>
+
+    </div><!-- /.panel-body -->
+  </div><!-- /.panel -->
+</div><!-- /.panel-group -->
+
+<script>
+(function(){
+  var nameEl=document.getElementById('contribName'),
+      tokEl=document.getElementById('contribToken'),
+      statusEl=document.getElementById('contribStatus'),
+      outEl=document.getElementById('contribOut'),
+      linkEl=document.getElementById('contribLink');
+  function show(t){ outEl.style.display='block'; outEl.textContent=t; }
+  function refreshStatus(){
+    fetch('api/contribute_api.php?action=status',{cache:'no-store'})
+      .then(function(r){return r.text();})
+      .then(function(t){
+        if(/STATUS:ready/.test(t)){
+          var m=t.match(/name:(.*)/); var nm=(m&&m[1].trim())?(' ('+m[1].trim()+')'):'';
+          statusEl.innerHTML='<span class="text-success">✓ eingerichtet'+nm+'</span>';
+        } else {
+          statusEl.innerHTML='<span class="text-warning">noch nicht eingerichtet</span>';
+        }
+      }).catch(function(){});
+  }
+  document.getElementById('contribSave').addEventListener('click', function(e){
+    e.preventDefault();
+    if(tokEl.value.trim()===''){ show('Bitte zuerst den Token einfügen.'); return; }
+    show('Speichere...');
+    var body='action=savetoken&name='+encodeURIComponent(nameEl.value)+'&token='+encodeURIComponent(tokEl.value);
+    fetch('api/contribute_api.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body,cache:'no-store'})
+      .then(function(r){return r.text();})
+      .then(function(t){ show(t); tokEl.value=''; refreshStatus(); })
+      .catch(function(){ show('Fehler beim Speichern.'); });
+  });
+  document.getElementById('contribSubmit').addEventListener('click', function(e){
+    e.preventDefault();
+    if(!confirm('Deine aktuellen Änderungen als Vorschlag einreichen?')) return;
+    show('Reiche ein...'); linkEl.innerHTML='';
+    var body='action=submit&desc='+encodeURIComponent(document.getElementById('contribDesc').value);
+    fetch('api/contribute_api.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body,cache:'no-store'})
+      .then(function(r){return r.text();})
+      .then(function(t){
+        show(t);
+        var m=t.match(/https:\/\/github\.com\/\S+compare\S+/);
+        if(m){ linkEl.innerHTML='<a href="'+m[0]+'" target="_blank" class="btn btn-success"><i class="mdi mdi-source-pull"></i> Pull Request oeffnen und abschicken</a>'; }
+      })
+      .catch(function(){ show('Fehler beim Einreichen.'); });
+  });
+  refreshStatus();
 })();
 </script>
 
