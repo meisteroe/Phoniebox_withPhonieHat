@@ -57,8 +57,11 @@ backups/
 Doku/
 NxpNfcRdLib_PN5180_v07.14.00_Pub/
 shared/config-backups/
-shared/shortcuts/
 settings/
+# Karten-Zuordnungen (Karten-UID -> Ordner) SOLLEN geteilt werden (verliehene/Freundes-Karten).
+# shared/* (oben) schliesst sie aus -> hier gezielt wieder einschliessen. Medien bleiben aus.
+!shared/shortcuts/
+!shared/shortcuts/**
 
 # Experiment-/Backup-Skripte (bleiben lokal auf der Box)
 scripts/_backup_*
