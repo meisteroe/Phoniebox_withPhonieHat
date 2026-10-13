@@ -210,9 +210,9 @@ if($debug == "true") {
         Nichts wird direkt &uuml;bernommen &ndash; Adrian pr&uuml;ft jeden Vorschlag und entscheidet.
       </p>
 
-      <div class="well well-sm" style="background:#f7f7f9;">
-        <strong>Einmalige Einrichtung:</strong>
-        <ol style="margin:8px 0 0 18px; padding:0;">
+      <div class="well well-sm" style="background:#f7f7f9; color:#222; border:1px solid #ddd;">
+        <strong style="color:#111;">Einmalige Einrichtung:</strong>
+        <ol style="margin:8px 0 0 18px; padding:0; color:#222;">
           <li>Kostenloses <strong>GitHub-Konto</strong> erstellen auf <a href="https://github.com/signup" target="_blank">github.com/signup</a>.</li>
           <li>Adrian deinen <strong>GitHub-Benutzernamen</strong> nennen &ndash; er l&auml;dt dich einmalig als Mitarbeiter ein.</li>
           <li><strong>Zugangs-Token</strong> erstellen unter
