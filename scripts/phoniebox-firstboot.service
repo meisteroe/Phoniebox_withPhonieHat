@@ -1,0 +1,13 @@
+[Unit]
+Description=Phoniebox First-Boot Initialisierung (einmalig, nur auf geklonten Boxen)
+After=network.target
+# Doppelte Absicherung: systemd ueberspringt den Dienst, wenn der Marker existiert.
+ConditionPathExists=!/var/lib/phoniebox-firstboot.done
+
+[Service]
+Type=oneshot
+ExecStart=/home/pi/RPi-Jukebox-RFID/scripts/custom_firstboot.sh
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target
