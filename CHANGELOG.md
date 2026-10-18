@@ -1,5 +1,11 @@
 # Changelog – Phoniebox Custom HAT Edition
 
+## 1.0.1 (2026-10-18)
+
+### Verbessert
+- WLAN-Laendercode DE (Client und Hotspot) gesetzt: zuverlaessigerer Verbindungs- und Hotspot-Start.
+- Hotspot bleibt bei fehlendem WLAN 4 Minuten offen und schaltet dann ab (Akku sparen, kein Wieder-Aufgehen bis Neustart).
+
 ## 1.0.0 (2026-10-12)
 
 Erste eigenständige Version für die PhonieHat-Hardware (Pi Zero 2W, PN532/MFRC522, SK9822-LEDs, Akku).
