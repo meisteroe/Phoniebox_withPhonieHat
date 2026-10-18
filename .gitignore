@@ -54,7 +54,8 @@ composer.phar
 # --- Custom HAT: boxspezifisch / nicht ins oeffentliche Repo ---
 .claude/
 backups/
-Doku/
+Doku/*
+!Doku/Anleitung Phoniebox.html
 NxpNfcRdLib_PN5180_v07.14.00_Pub/
 shared/config-backups/
 settings/

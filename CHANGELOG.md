@@ -1,5 +1,11 @@
 # Changelog – Phoniebox Custom HAT Edition
 
+## 1.0.2 (2026-10-18)
+
+### Verbessert
+- Komplettanleitung liegt jetzt im Repo und wird ueber den Update-Knopf mitverteilt (kuenftige Funktionen landen automatisch in der Anleitung).
+- Anleitung: Abschnitt zur Ordnerstruktur ergaenzt - gleiche Pfade sorgen dafuer, dass verliehene Karten boxuebergreifend funktionieren.
+
 ## 1.0.1 (2026-10-18)
 
 ### Verbessert

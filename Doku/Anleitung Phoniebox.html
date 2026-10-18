@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phoniebox — Komplettanleitung</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1f2430; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#0ce3ac; --accent-dark:#0b8f6e;
+    --red:#e53935; --green:#43a047; --blue:#1e88e5; --yellow:#fbc02d;
+    --purple:#8e24aa; --orange:#fb8c00;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif;
+    line-height:1.6;font-size:16px}
+  .wrap{max-width:880px;margin:0 auto;padding:24px 16px 80px}
+  header.hero{background:linear-gradient(135deg,#11161f,#1f2a3a);color:#fff;border-radius:16px;
+    padding:28px 24px;margin-bottom:24px}
+  header.hero h1{margin:0 0 6px;font-size:1.8rem}
+  header.hero p{margin:0;color:#c7d0dc}
+  h2{margin:34px 0 12px;font-size:1.3rem;border-bottom:2px solid var(--accent);padding-bottom:6px}
+  h3{margin:22px 0 8px;font-size:1.08rem}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:14px 0}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:.95rem}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f0f2f5;font-weight:600}
+  code{background:#eef1f4;padding:1px 6px;border-radius:5px;font-size:.9em}
+  ol,ul{margin:8px 0 8px 2px;padding-left:22px}
+  li{margin:4px 0}
+  .dot{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:6px;
+    vertical-align:middle;border:1px solid rgba(0,0,0,.15)}
+  .tip{background:#eafaf4;border-left:4px solid var(--accent-dark);border-radius:8px;padding:10px 14px;margin:12px 0}
+  .warn{background:#fff4e5;border-left:4px solid var(--orange);border-radius:8px;padding:10px 14px;margin:12px 0}
+  .toc{columns:2;column-gap:28px}
+  .toc a{color:var(--accent-dark);text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+  @media(max-width:560px){.toc{columns:1}}
+  .pulse{animation:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>📻 Phoniebox — Komplettanleitung</h1>
+  <p>Bedienung, Tasten, LED-Signale, Karten &amp; Medien</p>
+</header>
+
+<div class="card">
+  <strong>Inhalt</strong>
+  <div class="toc">
+    <a href="#start">1. Erste Schritte &amp; WLAN</a><br>
+    <a href="#webui">2. WebUI öffnen</a><br>
+    <a href="#tasten">3. Die Tasten</a><br>
+    <a href="#led">4. LED-Signale &amp; Beleuchtung</a><br>
+    <a href="#karten">5. Karten mit Medien verknüpfen</a><br>
+    <a href="#medien">6. Medien &amp; Ordnerstruktur</a><br>
+    <a href="#aufnahme">7. Aufnahme-Funktion</a><br>
+    <a href="#hotspot">8. WLAN-Hotspot (unterwegs)</a><br>
+    <a href="#akku">9. Akku</a><br>
+    <a href="#admin">10. Erweitert / Technik</a><br>
+    <a href="#hilfe">11. Problembehebung</a><br>
+  </div>
+</div>
+
+<!-- 1 -->
+<h2 id="start">1. Erste Schritte &amp; WLAN</h2>
+<div class="card">
+  <p>Nach dem Einschalten ertönt der Startton. Die Box verbindet sich automatisch mit einem
+  bekannten WLAN. Ist keins in Reichweite, öffnet sie nach ca. 30&nbsp;Sekunden einen eigenen
+  Hotspot (siehe Abschnitt&nbsp;8).</p>
+  <h3>Neues WLAN eintragen</h3>
+  <ol>
+    <li>Mit der Box (bzw. ihrem Hotspot) ins selbe Netzwerk gehen</li>
+    <li>WebUI öffnen → <strong>Einstellungen → WiFi-Einstellungen</strong></li>
+    <li><strong>„Netzwerke suchen"</strong> klicken, gewünschtes Netz antippen, Passwort eingeben, <strong>Absenden</strong></li>
+  </ol>
+  <div class="tip"><strong>Standard-Zugangsdaten</strong> (WLAN-Hotspot, Netzwerkfreigabe &amp; SSH):
+  Benutzer <code>pi</code>, Passwort <code>PlayItLoud</code>.</div>
+</div>
+
+<!-- 2 -->
+<h2 id="webui">2. WebUI öffnen</h2>
+<div class="card">
+  <p>Die Box über einen Browser steuern &amp; einrichten:</p>
+  <ul>
+    <li>Im Heimnetz: <code>http://phoniebox.local</code> (bei mehreren Boxen der jeweilige Gerätename, z.&nbsp;B. <code>phoniebox002.local</code>) — <strong>oder die IP-Adresse</strong> der Box</li>
+    <li>Im Hotspot-Modus: <code>http://10.0.0.5</code></li>
+  </ul>
+  <div class="tip"><strong>Name oder IP?</strong> Der <code>.local</code>-Name ist erst <strong>~1&nbsp;Minute nach dem Einschalten</strong> erreichbar (die Box muss sich erst im Netzwerk anmelden) — die <strong>IP-Adresse funktioniert sofort</strong> und zuverlässiger. <strong>Android-Handys</strong> können <code>.local</code> oft gar nicht auflösen; dort <strong>immer die IP</strong> verwenden. Tipp: im Router eine feste IP (DHCP-Reservierung) vergeben und als Lesezeichen speichern.</div>
+  <p>Hier verwaltest du Karten, Medien, Lautstärke, WLAN und findest unter
+  <strong>Info → Dokumentation</strong> diese Anleitung sowie Schaltplan und Karten-Design.</p>
+</div>
+
+<!-- 3 -->
+<h2 id="tasten">3. Die Tasten</h2>
+<div class="card">
+<table>
+  <tr><th>Taste</th><th>Kurz drücken</th><th>Halten</th></tr>
+  <tr><td>▶️ Play / Pause</td><td>Wiedergabe starten / pausieren</td><td>—</td></tr>
+  <tr><td>⏭️ Weiter (Next)</td><td>nächster Titel</td><td>vorspulen</td></tr>
+  <tr><td>⏮️ Zurück (Prev)</td><td>vorheriger Titel</td><td>zurückspulen</td></tr>
+  <tr><td>🔊 Lauter / 🔉 Leiser</td><td>Lautstärke ändern</td><td>fortlaufend ändern</td></tr>
+  <tr><td>🔊+🔉 (beide)</td><td>Stummschalten</td><td>—</td></tr>
+  <tr><td>⏺️ Record</td><td>Aufnahme starten / beenden</td><td><strong>5&nbsp;Sek.</strong>: Verknüpfung löschen</td></tr>
+  <tr><td>⏻ Power</td><td>—</td><td>Gerät herunterfahren</td></tr>
+  <tr><td>🌙 Sleep-Timer</td><td>Einschlaf-Timer starten</td><td>—</td></tr>
+  <tr><td>💡 Licht</td><td>Beleuchtung weiterschalten (Slots → aus)</td><td>—</td></tr>
+</table>
+<p class="toc" style="columns:1;color:var(--muted);font-size:.9rem">Kopfhörer: Beim Einstecken schaltet die
+Box automatisch auf Kopfhörer um.</p>
+</div>
+
+<!-- 4 -->
+<h2 id="led">4. LED-Signale &amp; Beleuchtung</h2>
+<div class="card">
+  <h3>Kurze Signale</h3>
+  <table>
+    <tr><th>Signal</th><th>Bedeutung</th></tr>
+    <tr><td><span class="dot" style="background:var(--green)"></span>Grün kurz</td><td>Karte erkannt / Aktion OK</td></tr>
+    <tr><td><span class="dot" style="background:var(--yellow)"></span>Gelb kurz</td><td>Tastendruck erkannt</td></tr>
+    <tr><td><span class="dot" style="background:var(--blue)"></span>Blau blinkt 3×</td><td>Unbekannte / nicht verknüpfte Karte</td></tr>
+    <tr><td><span class="dot" style="background:var(--green)"></span>Grün blinkt 3×</td><td>Aufnahme gespeichert</td></tr>
+    <tr><td><span class="dot" style="background:var(--purple)"></span>Lila blinkt 3×</td><td>Verknüpfung gelöscht / archiviert</td></tr>
+    <tr><td><span class="dot" style="background:var(--red)"></span>Rot blinkt 3×</td><td>Fehler</td></tr>
+    <tr><td><span class="dot" style="background:var(--purple)"></span>Lila kurz</td><td>Herunterfahren wird eingeleitet</td></tr>
+  </table>
+  <h3>Dauer-Signale (Pulsieren)</h3>
+  <table>
+    <tr><th>Signal</th><th>Bedeutung</th></tr>
+    <tr><td><span class="dot" style="background:var(--red)"></span>Rot pulsiert</td><td><strong>Aufnahme läuft</strong></td></tr>
+    <tr><td><span class="dot" style="background:var(--red)"></span><span class="dot" style="background:var(--green)"></span>Rot↔Grün pulsiert</td><td><strong>Aufnahme pausiert</strong> &nbsp;(Rot = Record beendet, Grün = Play/Pause setzt fort)</td></tr>
+    <tr><td><span class="dot" style="background:var(--purple)"></span>Lila pulsiert</td><td>Ton ist stummgeschaltet</td></tr>
+  </table>
+  <h3>Akku-Anzeige (eigene LED)</h3>
+  <p>
+    <span class="dot" style="background:var(--green)"></span>Grün = gut &nbsp;·&nbsp;
+    <span class="dot" style="background:var(--yellow)"></span>Gelb = mittel &nbsp;·&nbsp;
+    <span class="dot" style="background:var(--red)"></span>Rot pulsierend = kritisch (Box schaltet bald ab)
+  </p>
+  <h3>💡 Beleuchtung (Licht-Funktion)</h3>
+  <p>Die Phoniebox kann zusätzlich dekorativ leuchten. Unter dem Hauptmenü-Punkt <strong>„LED"</strong>
+  lassen sich bis zu <strong>6 Beleuchtungs-Slots</strong> einstellen (Farbe bzw. Effekt je Slot).
+  Mit dem <strong>Licht-Button</strong> am Gerät schaltest du durch die Slots:</p>
+  <p style="text-align:center"><code>aus → Slot 1 → Slot 2 → … → letzter Slot → aus → …</code></p>
+  <h3>🌙 Sleep-Timer</h3>
+  <p>Jeder Druck auf die Sleep-Taste schaltet den Einschlaf-Timer weiter — mit jeweils einer LED mehr:
+  <strong>20 Min</strong> (LED 11), <strong>40 Min</strong> (LED 10+11), <strong>60 Min</strong> (LED 9+10+11),
+  vierter Druck = aus. Nach Ablauf fährt die Box herunter. Während die Zeit läuft, erlöschen die LEDs
+  nacheinander von innen nach außen und werden dabei dunkler — ein sichtbarer Countdown.</p>
+</div>
+
+<!-- 5 -->
+<h2 id="karten">5. Karten mit Medien verknüpfen</h2>
+<div class="card">
+  <ol>
+    <li>Karte auf den Reader legen</li>
+    <li>In der WebUI oben im Menü auf <strong>„Karten-ID"</strong> gehen</li>
+    <li>Ordner (Album/Hörspiel) oder Stream auswählen und speichern</li>
+    <li>Fertig — ab jetzt startet diese Karte das zugeordnete Medium</li>
+  </ol>
+  <p>Eine unbekannte Karte quittiert die Box mit <span class="dot" style="background:var(--blue)"></span>blauem
+  Blinken. Gestaltungsregeln für einheitliche Karten findest du im Dokument
+  <em>„Phoniebox RFID-Karten — Designsystem"</em> (Info → Dokumentation).</p>
+</div>
+
+<!-- 6 -->
+<h2 id="medien">6. Medien &amp; Ordnerstruktur</h2>
+<div class="card">
+  <p>Alle Medien liegen auf der Box im Ordner <code>shared/audiofolders/</code>, sortiert in Kategorien:</p>
+  <ul>
+    <li><code>Musik/</code>, <code>Hörbücher/</code>, <code>Tonies/</code>, <code>Podcast/</code>, <code>Recordings/</code></li>
+  </ul>
+  <p>Jeder <strong>Unterordner</strong> ist ein „Album", das sich mit einer Karte verknüpfen lässt.</p>
+
+  <h3>📁 Gleiche Ordnerstruktur = Karten funktionieren auf jeder Box</h3>
+  <div class="tip"><strong>Wichtig bei mehreren Boxen:</strong> Eine Karte speichert nicht das Medium selbst,
+  sondern nur den <strong>Ordner-Pfad</strong> (z.&nbsp;B. <code>Tonies/L/Lichterkinder - Die besten Spiel- und Bewegungslieder</code>).
+  Eine verliehene oder von einem Freund angelegte Karte spielt auf einer anderen Box also nur dann,
+  wenn dort <strong>dasselbe Album im exakt gleichen Pfad</strong> liegt.</div>
+  <p>Medien werden dabei <strong>nicht</strong> zwischen Boxen kopiert oder verschickt (das wäre bei fremden
+  Hörspielen/Musik auch nicht erlaubt). Wer dasselbe Album besitzt, legt es einfach in <strong>denselben Pfad</strong>.
+  Damit das zusammenpasst, haltet euch an eine <strong>gemeinsame Struktur</strong>:</p>
+  <ul>
+    <li>Oben die <strong>Kategorie</strong>: <code>Musik/</code>, <code>Hörbücher/</code>, <code>Tonies/</code>, <code>Podcast/</code> …</li>
+    <li>Darunter der <strong>Album-/Serienordner exakt gleich benannt</strong> — gleiche Schreibweise, Groß-/Kleinschreibung und Leerzeichen</li>
+    <li>Beispiel auf <em>beiden</em> Boxen identisch: <code>Hörbücher/Känguru/Die Känguru-Apokryphen</code></li>
+  </ul>
+  <p>Die <strong>Karten-Zuordnungen</strong> selbst teilt ihr untereinander (über GitHub / den Update-Knopf) —
+  so kennt jede Box dieselben Karten und braucht nur noch die passenden Medien am gleichen Ort.</p>
+
+  <h3>Neue Alben hinzufügen</h3>
+  <ol>
+    <li>Am PC die Netzwerkfreigabe öffnen: <code>\\phoniebox\phoniebox\RPi-Jukebox-RFID\shared\audiofolders</code></li>
+    <li>Den Album-Ordner mit den MP3s hineinkopieren</li>
+    <li>Die Mediathek aktualisiert sich <strong>automatisch</strong> (nach kurzer Zeit) — danach ist das Album in der WebUI wählbar</li>
+  </ol>
+  <div class="tip">Alternativ geht das Hochladen auch über die WebUI unter
+  <strong>„Dateien verwalten"</strong>.</div>
+</div>
+
+<!-- 7 -->
+<h2 id="aufnahme">7. Aufnahme-Funktion</h2>
+<div class="card">
+  <h3>Aufnahme erstellen</h3>
+  <ol>
+    <li>Neue, unverknüpfte Karte auf den Reader legen</li>
+    <li>Record-Button drücken → <span class="dot" style="background:var(--red)"></span>LED pulsiert rot</li>
+    <li>Sprechen / aufnehmen (max. 5&nbsp;Minuten pro Abschnitt)</li>
+    <li>Record erneut drücken → <span class="dot" style="background:var(--green)"></span>LED blinkt grün</li>
+    <li>Die Karte ist jetzt mit der Aufnahme verknüpft</li>
+  </ol>
+  <h3>Pausieren / Fortsetzen</h3>
+  <ol>
+    <li>Play/Pause drücken → <span class="dot" style="background:var(--red)"></span><span class="dot" style="background:var(--green)"></span>pulsiert rot↔grün (pausiert)</li>
+    <li>Play/Pause erneut → Aufnahme läuft weiter (<span class="dot" style="background:var(--red)"></span>rot)</li>
+    <li>Record beendet die Aufnahme — auch aus der Pause heraus</li>
+  </ol>
+  <h3>Weitere Aufnahme auf dieselbe Karte</h3>
+  <ol>
+    <li>Besprochene Karte auflegen (Aufnahme spielt ab)</li>
+    <li>Record drücken → Wiedergabe stoppt, neue Aufnahme startet</li>
+    <li>Die <strong>neueste</strong> Aufnahme wird künftig zuerst abgespielt, ältere danach</li>
+  </ol>
+  <h3>Mitsingen / Musik mischen</h3>
+  <p>Während der Aufnahme eine Musikkarte auflegen → die Musik spielt und wird über das Mikrofon
+  <strong>mitaufgenommen</strong>. Titelwahl (Weiter/Zurück) und Lautstärke lassen sich dabei bedienen;
+  danach erscheint wieder das Aufnahme-Signal.</p>
+  <h3>Abspielen</h3>
+  <p>Verknüpfte Karte auflegen → spielt automatisch (neueste zuerst, dabei 15&nbsp;% lauter;
+  danach stellt sich die Lautstärke wieder zurück).</p>
+  <h3>Verknüpfung löschen</h3>
+  <ol>
+    <li>Verknüpfte Recording-Karte auflegen</li>
+    <li>Record <strong>5&nbsp;Sekunden</strong> halten → <span class="dot" style="background:var(--purple)"></span>LED blinkt lila</li>
+    <li>Alle Aufnahmen werden nach <code>Recordings/Archiv/</code> verschoben (bleiben erhalten)</li>
+    <li>Die Karte ist wieder frei und kann neu besprochen werden</li>
+  </ol>
+</div>
+
+<!-- 8 -->
+<h2 id="hotspot">8. WLAN-Hotspot (unterwegs)</h2>
+<div class="card">
+  <ol>
+    <li>Box einschalten — ist kein bekanntes WLAN in Reichweite, öffnet sich nach ~30–60&nbsp;Sek. der Hotspot</li>
+    <li>Am Handy/Laptop das WLAN <strong>„phoniebox"</strong> (bzw. den Gerätenamen) wählen, Passwort <code>PlayItLoud</code></li>
+    <li>Browser öffnen: <code>http://10.0.0.5</code> → unter <strong>Einstellungen → WiFi</strong> dein WLAN eintragen</li>
+  </ol>
+  <div class="warn"><strong>So verhält sich der Hotspot (Akku-Schonung unterwegs):</strong>
+  <ul>
+    <li>Er öffnet sich <strong>nur, wenn kein bekanntes WLAN</strong> gefunden wird.</li>
+    <li>Er bleibt <strong>4&nbsp;Minuten</strong> offen. Trägst du in dieser Zeit dein WLAN ein, verbindet sich die Box und der Hotspot schließt automatisch.</li>
+    <li>Verbindet sich niemand, schaltet er sich nach den 4&nbsp;Minuten <strong>ab</strong> und geht <strong>erst beim nächsten Neustart</strong> wieder auf — das spart Akku, z.&nbsp;B. im Urlaub ganz ohne WLAN.</li>
+    <li>Solange ein Gerät mit dem Hotspot verbunden ist, bleibt er offen.</li>
+  </ul></div>
+</div>
+
+<!-- 9 -->
+<h2 id="akku">9. Akku</h2>
+<div class="card">
+  <p>Den Ladestand zeigt die Akku-LED (grün/gelb/rot). Bei kritischem Stand warnt die Box
+  (<span class="dot" style="background:var(--red)"></span>rot pulsierend) und fährt dann
+  selbstständig herunter, um den Akku zu schützen. Die aktuelle Wiedergabe-Position wird dabei
+  gespeichert und beim nächsten Auflegen der Karte fortgesetzt.</p>
+</div>
+
+<!-- 10 -->
+<h2 id="admin">10. Erweitert / Technik</h2>
+<div class="card">
+  <h3>Zugänge</h3>
+  <ul>
+    <li>Netzwerkfreigabe (Dateien): <code>\\phoniebox\phoniebox</code></li>
+    <li>SSH: <code>pi@phoniebox.local</code> — Passwort <code>PlayItLoud</code></li>
+  </ul>
+  <h3>Box umbenennen (mehrere Boxen im Netz)</h3>
+  <p>Bei mehreren Boxen braucht jede einen <strong>eindeutigen Namen</strong>, sonst kollidieren sie im Netzwerk.
+  Das geht bequem in der WebUI — <strong>kein Terminal nötig</strong>:</p>
+  <ol>
+    <li><strong>Einstellungen → Gerätename</strong> öffnen</li>
+    <li>Neuen Namen eintragen, z.&nbsp;B. <code>phoniebox002</code> (nur Buchstaben, Zahlen, Bindestrich; nicht am Anfang/Ende), dann <strong>Setzen</strong></li>
+  </ol>
+  <p>Die Box ist danach als <code>&lt;name&gt;.local</code> erreichbar. <strong>Hinweis:</strong> Nach dem Umbenennen
+  (und nach jedem Neustart) dauert es <strong>~1&nbsp;Minute</strong>, bis der neue Name im Netz auftaucht; die
+  <strong>IP-Adresse funktioniert sofort</strong>. Am Android-Handy ohnehin die IP verwenden.</p>
+  <h3>Start-/Herunterfahr-Ton ändern</h3>
+  <p>Dateien in <code>\\phoniebox\phoniebox\RPi-Jukebox-RFID\shared</code> ersetzen:
+  <code>startupsound.mp3</code> und <code>shutdownsound.mp3</code>.</p>
+</div>
+
+<!-- 11 -->
+<h2 id="hilfe">11. Problembehebung</h2>
+<div class="card">
+  <table>
+    <tr><th>Problem</th><th>Lösung</th></tr>
+    <tr><td>Album wird in der WebUI angezeigt, spielt aber nicht</td>
+        <td>Mediathek aktualisiert sich normalerweise automatisch. Falls nicht: kurz warten oder die Box neu starten.</td></tr>
+    <tr><td>Karte reagiert nicht (blaues Blinken)</td>
+        <td>Karte ist nicht verknüpft → „Karten-ID" (Abschnitt 5).</td></tr>
+    <tr><td>Aufnahme startet nicht</td>
+        <td>Album-Karten können nicht besprochen werden — nur unverknüpfte oder bereits besprochene Recording-Karten.</td></tr>
+    <tr><td>Keine Verbindung zur WebUI</td>
+        <td>Gleiches WLAN? Sonst Hotspot nutzen (Abschnitt 8).</td></tr>
+  </table>
+</div>
+
+<p style="text-align:center;color:var(--muted);margin-top:30px;font-size:.85rem">
+  Phoniebox · RPi-Jukebox-RFID · Diese Anleitung ist auch in der WebUI unter Info → Dokumentation zu finden.
+</p>
+
+</div>
+</body>
+</html>
