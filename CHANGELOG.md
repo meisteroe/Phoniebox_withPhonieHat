@@ -1,5 +1,11 @@
 # Changelog – Phoniebox Custom HAT Edition
 
+## 1.0.3 (2026-10-19)
+
+### Verbessert
+- SD-Karte: Dateisystem dehnt sich beim ersten Start automatisch auf die volle Kartengroesse aus (Erstboot-Skript). Fuer Boxen vom aktuellen Image zusaetzlich ein Knopf unter Info -> Speicher.
+- Anleitung: Problembehebung-Hinweis ergaenzt, dass .local (v.a. Android) oft nicht erreichbar ist -> IP verwenden.
+
 ## 1.0.2 (2026-10-18)
 
 ### Verbessert

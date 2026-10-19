@@ -18,6 +18,10 @@ fi
 
 echo "[phoniebox-firstboot] Erstinitialisierung laeuft..."
 
+# 0) Dateisystem auf volle Kartengroesse ausdehnen (falls die Karte groesser als das Image ist)
+parted -s /dev/mmcblk0 resizepart 2 100% 2>/dev/null
+resize2fs /dev/mmcblk0p2 2>/dev/null
+
 # 1) Eigene SSH-Host-Schluessel (eindeutiger "Ausweis" der Box)
 rm -f /etc/ssh/ssh_host_*
 ssh-keygen -A

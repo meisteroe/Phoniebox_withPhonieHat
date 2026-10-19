@@ -286,6 +286,38 @@ $exec = "df -H -B K / ";
 </div><!-- /.panel-group -->
 
 <?php
+// SD-Kartengroesse vs. Dateisystem -> Erweitern anbieten, falls die Karte groesser ist
+$cardBytes = (int)trim(@shell_exec("lsblk -bdno SIZE /dev/mmcblk0 2>/dev/null"));
+$cardGB = $cardBytes > 0 ? round($cardBytes/1000/1000/1000) : 0;
+$fsGB   = round($all/1024);
+if ($cardGB > 0 && ($cardGB - $fsGB) > 2):
+?>
+<div class="panel-group">
+  <div class="panel panel-default">
+    <div class="panel-body" style="border-left:4px solid #0b8f6e;">
+      <strong>SD-Karte nicht voll genutzt:</strong> Dateisystem ~<?php echo $fsGB; ?>&nbsp;GB, Karte ~<?php echo $cardGB; ?>&nbsp;GB.<br>
+      <a href="#" id="fsExpandBtn" class="btn btn-info btn-sm" style="margin-top:6px;"><i class="mdi mdi-arrow-expand-all"></i> Auf volle Kartengr&ouml;&szlig;e erweitern</a>
+      <pre id="fsExpandOut" style="display:none;margin-top:8px;white-space:pre-wrap;word-break:break-word;"></pre>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var b=document.getElementById('fsExpandBtn'), o=document.getElementById('fsExpandOut');
+  if(!b) return;
+  b.addEventListener('click', function(e){ e.preventDefault();
+    if(!confirm('Dateisystem jetzt auf die volle Kartengröße erweitern?')) return;
+    o.style.display='block'; o.textContent='Erweitere… (einen Moment)';
+    fetch('api/storage_api.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=expand',cache:'no-store'})
+      .then(function(r){return r.text();})
+      .then(function(t){ o.textContent=t+'\n\nBitte die Seite neu laden, um die neue Größe zu sehen.'; })
+      .catch(function(){ o.textContent='Fehler beim Erweitern.'; });
+  });
+})();
+</script>
+<?php endif; ?>
+
+<?php
 /* === Dokumentation: Ordner ../Doku rekursiv auflisten (Unterordner aufklappbar) === */
 $dokuDir = __DIR__ . '/../Doku';
 
