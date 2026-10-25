@@ -204,6 +204,12 @@ def on_connect(client, userdata, flags, rc):
 
         if config.get("homeAssistantDiscovery"):
             publishHomeAssistantDiscovery()
+            # Home Assistant announces restarts here -> resend everything
+            client.subscribe(config.get("homeAssistantDiscoveryPrefix") + "/status")
+
+        # send all attributes in the next cycle (not only changed ones)
+        global lastFullPublish
+        lastFullPublish = 0
 
     else:
         print("Connection could NOT be established. Return-Code:", rc)
@@ -345,6 +351,14 @@ def on_log(client, userdata, level, buf):
 
 
 def on_message(client, userdata, message):
+    global lastFullPublish
+    if message.topic == config.get("homeAssistantDiscoveryPrefix") + "/status":
+        if message.payload.decode("utf-8") == "online":
+            print("Home Assistant (re)started -> resending discovery and all attributes")
+            publishHomeAssistantDiscovery()
+            lastFullPublish = 0
+        return
+
     print("")
     print("MQTT message incoming to subscriptions...")
     print(" - topic =", message.topic)
@@ -361,7 +375,7 @@ def on_message(client, userdata, message):
         processCmd(message_subtopic, message_payload)
 
     elif message_topic == "get":
-        processGet(message_subtopic)
+        processGet(message_subtopic, force=True)
 
 
 def processCmd(command, parameter):
@@ -450,31 +464,42 @@ def processCmd(command, parameter):
         return
 
     # this was a known command => refresh all attributes as they might have changed
+    refreshSlowValuesSoon()
     client.publish(config.get("mqttBaseTopic") + "/get/all", payload="")
 
 
-def processGet(attribute):
-    mpd_status = fetchData()
+# last published value per attribute (publish only on change, see processGet)
+lastPublished = {}
+lastFullPublish = 0
+FULL_PUBLISH_INTERVAL = 60  # seconds; send everything at least this often
 
-    # respond with all attributes
-    if attribute == "all":
-        for attribute in mpd_status:
-            client.publish(
-                config.get("mqttBaseTopic") + "/attribute/" + attribute,
-                payload=mpd_status[attribute],
-            )
-            print(
-                " --> Publishing response " + attribute + " = " + mpd_status[attribute]
-            )
+
+def processGet(attribute, force=False):
+    global lastFullPublish
 
     # list all possible attributes
-    elif attribute == "help":
+    if attribute == "help":
         availableAttributes = ", ".join(arAvailableAttributes)
         client.publish(
             config.get("mqttBaseTopic") + "/available_attributes",
             payload=availableAttributes,
         )
-        print(" --> Publishing response", availableAttributes)
+        return
+
+    mpd_status = fetchData()
+
+    # respond with all attributes (only changed ones, unless forced/periodic)
+    if attribute == "all":
+        if time.time() - lastFullPublish > FULL_PUBLISH_INTERVAL:
+            force = True
+        if force:
+            lastFullPublish = time.time()
+        for name, value in mpd_status.items():
+            if force or lastPublished.get(name) != value:
+                client.publish(config.get("mqttBaseTopic") + "/attribute/" + name, payload=value)
+                lastPublished[name] = value
+                if config.get("DEBUG"):
+                    print(" --> Publishing " + name + " = " + value)
 
     # all the other known attributes
     elif attribute in mpd_status:
@@ -482,7 +507,7 @@ def processGet(attribute):
             config.get("mqttBaseTopic") + "/attribute/" + attribute,
             payload=mpd_status[attribute],
         )
-        print(" --> Publishing response " + attribute + " = " + mpd_status[attribute])
+        lastPublished[attribute] = mpd_status[attribute]
 
     # we don't know this attribute
     else:
@@ -506,85 +531,105 @@ def readfile(filepath):
 
 
 def isServiceRunning(svc):
-    cmd = ["/bin/systemctl", "status", svc]
-    status = subprocess.run(cmd, stdout=subprocess.PIPE).stdout.decode("utf-8").rstrip()
-    if re.search("\n.*Active:.*running.*\n", status):
-        return "true"
-    else:
-        return "false"
+    cmd = ["/bin/systemctl", "is-active", "--quiet", svc]
+    return "true" if subprocess.run(cmd).returncode == 0 else "false"
 
 
-def linux_job_remaining(job_name):
-    cmd = ["sudo", "atq", "-q", job_name]
-    dtQueue = (
-        subprocess.run(cmd, stdout=subprocess.PIPE).stdout.decode("utf-8").rstrip()
-    )
+def linux_jobs_remaining():
+    """Minutes left per 'at' queue (s=stop, t=shutdown, q=volume reduction,
+    i=idle) from ONE atq call instead of one call per queue."""
+    result = {"s": 0, "t": 0, "q": 0, "i": 0}
+    out = subprocess.run(["sudo", "atq"], stdout=subprocess.PIPE).stdout.decode("utf-8")
+    now = datetime.datetime.now()
+    for line in out.splitlines():
+        # e.g. "12	Sun Oct 25 18:30:00 2026 s pi"
+        m = re.match(r"\d+\s+\w+\s+(\w+)\s+(\d+)\s+(\d+:\d+:\d+)\s+(\d+)\s+(\w)\s", line + " ")
+        if not m or m.group(5) not in result:
+            continue
+        try:
+            due = datetime.datetime.strptime(" ".join(m.group(1, 2, 3, 4)), "%b %d %H:%M:%S %Y")
+        except ValueError:
+            continue
+        minutes = max(0, int(round((due - now).total_seconds() / 60, 0)))
+        result[m.group(5)] = max(result[m.group(5)], minutes)
+    return result
 
-    regex = re.search(
-        "(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)", dtQueue
-    )
-    if regex:
-        dtNow = datetime.datetime.now()
-        dtQueue = datetime.datetime.strptime(
-            dtNow.strftime("%d.%m.%Y") + " " + regex.group(5), "%d.%m.%Y %H:%M:%S"
-        )
 
-        # subtract 1 day if queued for the next day
-        if dtNow > dtQueue:
-            dtNow = dtNow - datetime.timedelta(days=1)
-
-        return int(round((dtQueue.timestamp() - dtNow.timestamp()) / 60, 0))
-    else:
-        return 0
+THROTTLE_CODES = {
+    0: "under-voltage detected",
+    1: "arm frequency capped",
+    2: "currently throttled",
+    3: "soft temperature limit active",
+    16: "under-voltage has occurred",
+    17: "arm frequency capped has occurred",
+    18: "throttling has occurred",
+    19: "soft temperature limit has occurred",
+}
 
 
 def getOsThrottling():
-    codes = {
-        0: "under-voltage detected",
-        1: "arm frequency capped",
-        2: "currently throttled",
-        3: "soft temperature limit active",
-        16: "under-voltage has occurred",
-        17: "arm frequency capped has occurred",
-        18: "throttling has occurred",
-        19: "soft temperature limit has occurred",
-    }
-
-    p = subprocess.Popen(
-        ["vcgencmd", "get_throttled"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-    )
-    throttling, err = p.communicate()
-    codeHex = throttling.rstrip().split("0x")[1]
-
-    # code is zero => no issue
-    if codeHex == "0":
+    # read from sysfs (no vcgencmd process); fall back to vcgencmd
+    try:
+        code = int(readfile("/sys/devices/platform/soc/soc:firmware/get_throttled"), 16)
+    except Exception:
+        try:
+            out = subprocess.run(["vcgencmd", "get_throttled"], stdout=subprocess.PIPE).stdout.decode()
+            code = int(out.strip().split("0x")[1], 16)
+        except Exception:
+            return "-"
+    if code == 0:
         return "OK"
-
-    # analyse returned code
-    result = []
-    codeBinary = ""
-    for fourbits in codeHex:
-        codeBinary = codeBinary + bin(int(fourbits, 16))[2:].zfill(4)
-    codeBinary = codeBinary[::-1]
-    for bitNumber in range(len(codeBinary)):
-        if codeBinary[bitNumber] == "1":
-            result.append(codes[bitNumber])
-    return "WARNING: " + ", ".join(result)
+    return "WARNING: " + ", ".join(t for bit, t in THROTTLE_CODES.items() if code & (1 << bit))
 
 
 def getOsTemperature():
-    p = subprocess.Popen(
-        ["vcgencmd", "measure_temp"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-    )
-    temperature, err = p.communicate()
-    temperature = temperature.rstrip().split("=")[1]
-    return temperature
+    try:
+        return "{:.1f}'C".format(int(readfile("/sys/class/thermal/thermal_zone0/temp")) / 1000)
+    except Exception:
+        return "-"
+
+
+def readGlobalConf():
+    """Settings that playout_controls.sh would echo (getmaxvolume etc.),
+    read directly from global.conf instead of starting a bash script."""
+    values = {}
+    try:
+        with open(path + "/../settings/global.conf") as f:
+            for line in f:
+                m = re.match(r'\s*([A-Z0-9_]+)="?([^"\n]*)"?', line)
+                if m:
+                    values[m.group(1)] = m.group(2)
+    except Exception:
+        pass
+    return values
+
+
+def mpdQuery(commands, timeout=2):
+    """Talk to MPD directly (no 'nc' process)."""
+    data = b""
+    try:
+        with socket.create_connection(("localhost", 6600), timeout=timeout) as s:
+            s.sendall(("\n".join(commands) + "\nclose\n").encode("utf-8"))
+            while True:
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+    except Exception as e:
+        print("MPD query failed:", e)
+    return data.decode("utf-8", errors="replace")
+
+
+# slow values (timers, services, OS info) are refreshed less often
+SLOW_REFRESH_INTERVAL = 30  # seconds
+slowCache = {}
+slowCacheTime = 0
+
+
+def refreshSlowValuesSoon():
+    """Call after a command so timers/services show up right away."""
+    global slowCacheTime
+    slowCacheTime = 0
 
 
 def normalizeTrueFalse(s):
@@ -641,12 +686,10 @@ def fetchData():
 
     result = {}
 
+    global slowCache, slowCacheTime
+
     # fetch status from MPD
-    cmd = ["nc", "-w", "1", "localhost", "6600"]
-    input = "status\ncurrentsong\nclose".encode("utf-8")
-    status = subprocess.run(cmd, stdout=subprocess.PIPE, input=input).stdout.decode(
-        "utf-8"
-    )
+    status = mpdQuery(["status", "currentsong"])
 
     # interpret status
     result["state"] = regex("\nstate: (.*)\n", status).lower()
@@ -689,44 +732,29 @@ def fetchData():
             int(hours), int(minutes), int(seconds)
         )
 
-    # fetch some more data from global.conf (via playout_controls.sh)
-    result["maxvolume"] = (
-        subprocess.run(
-            [path + "/playout_controls.sh", "-c=getmaxvolume"], stdout=subprocess.PIPE
-        )
-        .stdout.decode("utf-8")
-        .rstrip()
-    )
-    result["volstep"] = (
-        subprocess.run(
-            [path + "/playout_controls.sh", "-c=getvolstep"], stdout=subprocess.PIPE
-        )
-        .stdout.decode("utf-8")
-        .rstrip()
-    )
-    result["idletime"] = (
-        subprocess.run(
-            [path + "/playout_controls.sh", "-c=getidletime"], stdout=subprocess.PIPE
-        )
-        .stdout.decode("utf-8")
-        .rstrip()
-    )
+    # settings from global.conf (same values playout_controls.sh would echo)
+    conf = readGlobalConf()
+    result["maxvolume"] = conf.get("AUDIOVOLMAXLIMIT", "-")
+    result["volstep"] = conf.get("AUDIOVOLCHANGESTEP", "-")
+    result["idletime"] = conf.get("IDLETIMESHUTDOWN", "-")
 
     # fetch last card
     result["last_card"] = readfile(path + "/../settings/Latest_RFID")
 
-    # fetch service states
-    result["rfid"] = isServiceRunning("phoniebox-rfid-reader.service")
-    result["gpio"] = isServiceRunning("phoniebox-gpio-control.service")
-
-    # fetch linux jobs
-    result["remaining_stopafter"] = str(linux_job_remaining("s"))
-    result["remaining_shutdownafter"] = str(linux_job_remaining("t"))
-    result["remaining_shutdownvolumereduction"] = str(linux_job_remaining("q"))
-    result["remaining_idle"] = str(linux_job_remaining("i"))
-
-    # fetch OS information
-    result["throttling"] = getOsThrottling()
+    # slow values: service states, 'at' timers, OS information
+    if time.time() - slowCacheTime > SLOW_REFRESH_INTERVAL:
+        jobs = linux_jobs_remaining()
+        slowCache = {
+            "rfid": isServiceRunning("phoniebox-rfid-reader.service"),
+            "gpio": isServiceRunning("phoniebox-gpio-control.service"),
+            "remaining_stopafter": str(jobs["s"]),
+            "remaining_shutdownafter": str(jobs["t"]),
+            "remaining_shutdownvolumereduction": str(jobs["q"]),
+            "remaining_idle": str(jobs["i"]),
+            "throttling": getOsThrottling(),
+        }
+        slowCacheTime = time.time()
+    result.update(slowCache)
     result["temperature"] = getOsTemperature()
 
     # modify refresh rate depending on play state
