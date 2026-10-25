@@ -32,6 +32,7 @@ import sys
 import signal
 import json
 import os
+import re
 import subprocess
 import RPi.GPIO as GPIO
 
@@ -132,6 +133,100 @@ print(f"=== Removal Detection: {'AN (Place-Mode)' if REMOVAL_ENABLED else 'AUS (
 print(f"=== Removal Threshold: {REMOVAL_THRESHOLD} None-reads ===")
 
 
+# === FUNKTIONSKARTEN ===
+# Funktionskarten (z.B. "Licht-Farbe wechseln" in Home Assistant) beeinflussen
+# die Musik NIE: Sie werden auf jedem Leser erkannt, auch wenn auf dem anderen
+# eine Musikkarte liegt, und ihr Wegnehmen stoppt nichts.
+#   settings/Function_Cards : eine Karten-ID pro Zeile, '#' = Kommentar.
+#       Diese Karten werden nur gemeldet (Latest_RFID -> MQTT/Home Assistant).
+#   Befehlskarten aus rfid_trigger_play.conf (CMDVOLUP="..." usw.) zählen
+#       ebenfalls als Funktionskarten, lösen aber zusätzlich ihren Befehl aus.
+BASE = "/home/pi/RPi-Jukebox-RFID"
+FUNCTION_CARDS_FILE = f"{BASE}/settings/Function_Cards"
+FUNCTION_CARDS = set()      # nur melden
+COMMAND_CARDS = set()       # melden + rfid_trigger_play (Befehl ausführen)
+FUNCTION_LAST_CHECK = 0
+
+
+def load_function_cards():
+    report, commands = set(), set()
+    try:
+        with open(FUNCTION_CARDS_FILE) as f:
+            for line in f:
+                card = line.split("#", 1)[0].strip().upper()
+                if card:
+                    report.add(card)
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        print(f"⚠ {FUNCTION_CARDS_FILE} nicht lesbar: {e}")
+    try:
+        with open(f"{BASE}/settings/rfid_trigger_play.conf") as f:
+            for line in f:
+                m = re.match(r'\s*CMD[A-Z0-9_]+="([0-9A-Fa-f]+)"', line)
+                if m:
+                    commands.add(m.group(1).upper())
+    except Exception:
+        pass
+    return report - commands, commands
+
+
+def reload_function_cards_if_needed():
+    global FUNCTION_CARDS, COMMAND_CARDS, FUNCTION_LAST_CHECK
+    now = time.time()
+    if now - FUNCTION_LAST_CHECK > 10:
+        new = load_function_cards()
+        if new != (FUNCTION_CARDS, COMMAND_CARDS):
+            print(f"[SETTINGS] Funktionskarten: {sorted(new[0])}, Befehlskarten: {sorted(new[1])}")
+        FUNCTION_CARDS, COMMAND_CARDS = new
+        FUNCTION_LAST_CHECK = now
+
+
+def is_function_card(cardid: str) -> bool:
+    return cardid.upper() in FUNCTION_CARDS or cardid.upper() in COMMAND_CARDS
+
+
+def trigger_function_card(cardid: str, reader_name: str):
+    print(f"[FUNKTION] {reader_name}: {cardid}")
+    led_feedback("card_ok")
+    if cardid.upper() in COMMAND_CARDS:
+        # rfid_trigger_play führt den Befehl aus und schreibt Latest_RFID selbst
+        subprocess.run([f"{BASE}/scripts/rfid_trigger_play.sh", f"-i={cardid}"])
+        return
+    # nur melden: Latest_RFID wird vom MQTT-Client überwacht (-> Home Assistant)
+    try:
+        with open(f"{BASE}/settings/Latest_RFID", "w") as f:
+            f.write(cardid + "\n")
+        with open(f"{BASE}/shared/latestID.txt", "w") as f:
+            f.write(f"Card ID '{cardid}' was used at '{time.strftime('%Y-%m-%d.%H:%M:%S')}'.\n")
+    except Exception as e:
+        print(f"⚠ Funktionskarte {cardid} konnte nicht gemeldet werden: {e}")
+
+
+# letzter erkannter Funktionskarten-Stand je Leser (+ Fehllese-Zähler)
+FUNC_LAST = {}
+FUNC_MISS = {}
+
+
+def handle_function_reader(reader_name: str, uid):
+    """Flankenerkennung je Leser: auslösen beim Auflegen, nicht beim Liegenbleiben."""
+    if uid and is_function_card(uid):
+        FUNC_MISS[reader_name] = 0
+        if FUNC_LAST.get(reader_name) != uid:
+            FUNC_LAST[reader_name] = uid
+            trigger_function_card(uid, reader_name)
+        return
+    if FUNC_LAST.get(reader_name):
+        FUNC_MISS[reader_name] = FUNC_MISS.get(reader_name, 0) + 1
+        if FUNC_MISS[reader_name] >= REMOVAL_THRESHOLD:
+            print(f"[FUNKTION] {reader_name}: {FUNC_LAST[reader_name]} entfernt")
+            FUNC_LAST[reader_name] = None
+            FUNC_MISS[reader_name] = 0
+
+
+reload_function_cards_if_needed()
+
+
 def is_valid_link(cardid: str) -> bool:
     path = f"/home/pi/RPi-Jukebox-RFID/shared/shortcuts/{cardid}"
     if not os.path.exists(path):
@@ -203,21 +298,27 @@ if top:
 
 while _running:
     reload_settings_if_needed()
+    reload_function_cards_if_needed()
 
     current_card = None
     current_reader = None
 
-    # 1. Front (PN532 I²C) hat Priorität
-    if front:
-        uid = front.read()
-        if uid:
-            current_card, current_reader = uid, front.name
+    # Beide Leser IMMER lesen, damit eine Funktionskarte auch erkannt wird,
+    # während auf dem anderen Leser eine Musikkarte liegt.
+    front_uid = front.read() if front else None
+    top_uid = top.read() if top else None
 
-    # 2. Oberer Reader nur prüfen, wenn vorne nichts liegt
-    if not current_card and top:
-        uid = top.read()
-        if uid:
-            current_card, current_reader = uid, top.name
+    # Funktionskarten: je Leser getrennt, ohne Einfluss auf die Musik
+    if front:
+        handle_function_reader(front.name, front_uid)
+    if top:
+        handle_function_reader(top.name, top_uid)
+
+    # Musikkarten (wie bisher): vorne hat Priorität, Funktionskarten zählen nicht
+    if front_uid and not is_function_card(front_uid):
+        current_card, current_reader = front_uid, front.name
+    elif top_uid and not is_function_card(top_uid):
+        current_card, current_reader = top_uid, top.name
 
     if current_card:
         REMOVAL_COUNTER = 0

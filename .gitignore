@@ -22,6 +22,7 @@ scripts/deviceName.txt
 scripts/gpio-buttons.py
 settings/PhonieboxInstall.conf
 settings/mqtt_client.json
+settings/Function_Cards
 
 shared/*
 playlists/*

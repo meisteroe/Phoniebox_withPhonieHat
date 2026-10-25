@@ -1,0 +1,6 @@
+# Funktionskarten: eine Karten-ID pro Zeile (Text nach '#' wird ignoriert).
+# Diese Karten starten keine Musik und stoppen sie auch nicht. Sie werden auf
+# beiden Lesern erkannt, auch wenn auf dem anderen eine Musikkarte liegt, und
+# nur an Home Assistant gemeldet (MQTT -> Tag gescannt).
+# Kopieren nach settings/Function_Cards und IDs eintragen.
+#E64634E6   # Beispiel: Kinderzimmer Lichtfarbe wechseln
