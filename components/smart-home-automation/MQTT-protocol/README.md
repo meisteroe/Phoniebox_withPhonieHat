@@ -127,6 +127,28 @@ MQTT clients can send commands to Phoniebox. Sending an empty payload to `phonie
 
 Sending empty payload to `phoniebox/cmd/help` will be responded by a list of all possible commands to `phoniebox/available_commands` and `phoniebox/available_commands_with_params`
 
+# Quick setup for Home Assistant (this fork)
+
+The daemon can run directly from this folder and announces itself to Home Assistant via MQTT discovery (sensors, volume sliders, sleep timers, buttons, and every swiped card as a Home Assistant *tag*).
+
+1. In Home Assistant: install the *Mosquitto broker* add-on, enable the MQTT integration and create a local, non-admin user (e.g. `phoniebox`).
+2. On the Phoniebox:
+
+~~~bash
+sudo pip3 install paho-mqtt inotify
+cd /home/pi/RPi-Jukebox-RFID
+cp components/smart-home-automation/MQTT-protocol/mqtt_client.json.sample settings/mqtt_client.json
+chmod 600 settings/mqtt_client.json
+nano settings/mqtt_client.json   # set mqttPassword (and mqttHostname if needed)
+sudo cp components/smart-home-automation/MQTT-protocol/phoniebox-mqtt-client.service-default.sample /etc/systemd/system/phoniebox-mqtt-client.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now phoniebox-mqtt-client
+~~~
+
+`settings/mqtt_client.json` is not tracked by git. With `"mqttBaseTopic": "auto"` the hostname (e.g. `phoniebox002`) is used as topic, so several boxes can share one broker.
+
+In Home Assistant the box shows up as a device. To let a card control other devices, create an automation with the trigger *Tag scanned* and pick the card (Settings → Tags lists every card that was swiped once).
+
 # Installation
 
 Install missing python packages for MQTT:

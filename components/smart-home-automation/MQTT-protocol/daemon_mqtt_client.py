@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 import datetime
+import json
 import os
 import re
+import socket
 import subprocess
 import time
 from threading import Thread
@@ -34,6 +36,8 @@ config = {
     "mqttConnectionTimeout": 60,  # in seconds; timeout for MQTT connection
     "refreshIntervalPlaying": 5,  # in seconds; how often should the status be sent to MQTT (while playing)
     "refreshIntervalIdle": 30,  # in seconds; how often should the status be sent to MQTT (when NOT playing)
+    "homeAssistantDiscovery": False,  # publish Home Assistant MQTT discovery configs
+    "homeAssistantDiscoveryPrefix": "homeassistant",
 }
 
 
@@ -41,8 +45,24 @@ config = {
 #  DO NOT CHANGE BELOW
 # ----------------------------------------------------------
 
-# absolute script path
+# absolute path of the Phoniebox "scripts" folder. The daemon may run from
+# scripts/ (classic install) or directly from components/.../MQTT-protocol/.
 path = os.path.dirname(os.path.realpath(__file__))
+if not os.path.exists(os.path.join(path, "playout_controls.sh")):
+    path = os.path.realpath(os.path.join(path, "..", "..", "..", "scripts"))
+
+# Optional local settings (not in git) override the defaults above, e.g.
+# settings/mqtt_client.json: {"mqttHostname": "homeassistant.local", ...}
+# The value "auto" for mqttBaseTopic / mqttClientId means: use the hostname,
+# so cloned boxes don't collide on the same broker.
+settingsFile = os.path.join(path, "..", "settings", "mqtt_client.json")
+if os.path.exists(settingsFile):
+    with open(settingsFile) as f:
+        config.update(json.load(f))
+hostname = socket.gethostname()
+for key in ("mqttBaseTopic", "mqttClientId"):
+    if config.get(key) == "auto":
+        config[key] = hostname
 
 # internal refresh interval
 refreshInterval = config.get("refreshIntervalPlaying")
@@ -178,13 +198,146 @@ def on_connect(client, userdata, flags, rc):
             retain=True,
         )
 
+        # (re)subscribe here so subscriptions survive reconnects
+        client.subscribe(config.get("mqttBaseTopic") + "/cmd/#")
+        client.subscribe(config.get("mqttBaseTopic") + "/get/#")
+
+        if config.get("homeAssistantDiscovery"):
+            publishHomeAssistantDiscovery()
+
     else:
         print("Connection could NOT be established. Return-Code:", rc)
 
 
 def on_disconnect(client, userdata, rc):
-    print("Disconnecting. Return-Code:", str(rc))
-    client.loop_stop()
+    # paho reconnects automatically as long as the network loop keeps running
+    print("Disconnected. Return-Code:", str(rc))
+
+
+def publishHomeAssistantDiscovery():
+    """Announce Phoniebox entities to Home Assistant (MQTT discovery)."""
+    base = config.get("mqttBaseTopic")
+    prefix = config.get("homeAssistantDiscoveryPrefix")
+    node = re.sub(r"[^a-zA-Z0-9_-]", "_", base)
+    device = {
+        "identifiers": [node],
+        "name": hostname,
+        "manufacturer": "Phoniebox",
+        "model": readfile(path + "/../settings/edition"),
+        "sw_version": readfile(path + "/../settings/version"),
+        "configuration_url": "http://" + hostname + ".local/",
+    }
+    common = {
+        "availability_topic": base + "/state",
+        "payload_available": "online",
+        "payload_not_available": "offline",
+        "device": device,
+    }
+
+    def attr(name):
+        return base + "/attribute/" + name
+
+    def cmd(name):
+        return base + "/cmd/" + name
+
+    entities = []
+
+    # sensors: (key, name, icon, unit, device_class, value_template)
+    sensors = [
+        ("state", "Status", "mdi:play-pause", None, None, None),
+        ("title", "Titel", "mdi:music", None, None, None),
+        ("artist", "Interpret", "mdi:account-music", None, None, None),
+        ("album", "Album", "mdi:album", None, None, None),
+        ("elapsed", "Laufzeit", "mdi:timer-outline", None, None, None),
+        ("duration", "Dauer", "mdi:timer", None, None, None),
+        ("last_card", "Letzte Karte", "mdi:card-account-details", None, None, None),
+        ("temperature", "CPU-Temperatur", None, "°C", "temperature",
+         "{{ value | replace(\"'C\", \"\") | float(0) }}"),
+        ("throttling", "Stromversorgung", "mdi:flash", None, None, None),
+        ("remaining_stopafter", "Stopp in", "mdi:timer-stop", "min", None, None),
+        ("remaining_shutdownafter", "Ausschalten in", "mdi:power-sleep", "min", None, None),
+        ("remaining_idle", "Leerlauf-Abschaltung in", "mdi:sleep", "min", None, None),
+    ]
+    for key, name, icon, unit, dclass, tpl in sensors:
+        e = {"name": name, "state_topic": attr(key)}
+        if icon:
+            e["icon"] = icon
+        if unit:
+            e["unit_of_measurement"] = unit
+        if dclass:
+            e["device_class"] = dclass
+            e["state_class"] = "measurement"
+        if tpl:
+            e["value_template"] = tpl
+        if key in ("temperature", "throttling"):
+            e["entity_category"] = "diagnostic"
+        entities.append(("sensor", key, e))
+
+    entities.append(("sensor", "disk_avail", {
+        "name": "Freier Speicher", "state_topic": base + "/disk_avail",
+        "unit_of_measurement": "GB", "icon": "mdi:sd", "entity_category": "diagnostic",
+    }))
+
+    # numbers: (key, name, icon, state attribute, command, min, max, unit)
+    numbers = [
+        ("volume", "Lautstärke", "mdi:volume-high", "volume", "setvolume", 0, 100, "%"),
+        ("maxvolume", "Maximale Lautstärke", "mdi:volume-plus", "maxvolume", "setmaxvolume", 0, 100, "%"),
+        ("stopafter", "Stopp nach", "mdi:timer-stop", "remaining_stopafter", "playerstopafter", 0, 180, "min"),
+        ("shutdownafter", "Ausschalten nach", "mdi:power-sleep", "remaining_shutdownafter", "shutdownafter", 0, 180, "min"),
+    ]
+    for key, name, icon, state, command, nmin, nmax, unit in numbers:
+        entities.append(("number", key, {
+            "name": name, "icon": icon, "state_topic": attr(state),
+            "command_topic": cmd(command), "command_template": "{{ value | int }}",
+            "min": nmin, "max": nmax, "step": 1, "unit_of_measurement": unit,
+            "mode": "slider" if unit == "%" else "box",
+        }))
+
+    # buttons: (command, name, icon)
+    buttons = [
+        ("playerplay", "Play", "mdi:play"),
+        ("playerpause", "Pause (umschalten)", "mdi:play-pause"),
+        ("playerstop", "Stopp", "mdi:stop"),
+        ("playernext", "Nächster Titel", "mdi:skip-next"),
+        ("playerprev", "Vorheriger Titel", "mdi:skip-previous"),
+        ("volumeup", "Lauter", "mdi:volume-plus"),
+        ("volumedown", "Leiser", "mdi:volume-minus"),
+        ("mute", "Stumm (umschalten)", "mdi:volume-mute"),
+        ("shutdown", "Herunterfahren", "mdi:power"),
+        ("reboot", "Neustart", "mdi:restart"),
+    ]
+    for command, name, icon in buttons:
+        e = {"name": name, "icon": icon, "command_topic": cmd(command), "payload_press": ""}
+        if command in ("shutdown", "reboot"):
+            e["entity_category"] = "config"
+        entities.append(("button", command, e))
+
+    # text field: play a folder by name
+    entities.append(("text", "playfolder", {
+        "name": "Ordner abspielen", "icon": "mdi:folder-play",
+        "command_topic": cmd("playfolder"), "max": 255,
+    }))
+
+    for component, key, e in entities:
+        e.update(common)
+        e["unique_id"] = node + "_" + key
+        e["object_id"] = node + "_" + key
+        client.publish(
+            prefix + "/" + component + "/" + node + "/" + key + "/config",
+            payload=json.dumps(e), qos=1, retain=True,
+        )
+
+    # every swiped card becomes a Home Assistant "tag" (Settings -> Tags)
+    client.publish(
+        prefix + "/tag/" + node + "/card/config",
+        payload=json.dumps({
+            "topic": base + "/event/card_swiped",
+            "value_template": "{{ value }}",
+            "device": device,
+        }),
+        qos=1, retain=True,
+    )
+    print("Published Home Assistant discovery for " + str(len(entities)) + " entities")
 
 
 def on_log(client, userdata, level, buf):
@@ -259,27 +412,24 @@ def processCmd(command, parameter):
     # virtually swipe a RFID card
     elif command == "swipecard":
         print(" --> Virtually swiping card with ID", parameter)
-        subprocess.call([path + "/rfid_trigger_play.sh -i=" + parameter], shell=True)
+        subprocess.call([path + "/rfid_trigger_play.sh", "-i=" + parameter])
 
     # play folder
     elif command == "playfolder":
         print(" --> Playing folder", parameter)
-        subprocess.call(
-            [path + "/rfid_trigger_play.sh -d='" + parameter + "'"], shell=True
-        )
+        subprocess.call([path + "/rfid_trigger_play.sh", "-d=" + parameter])
 
     # play folder (recursive)
     elif command == "playfolderrecursive":
         print(" --> Playing folder " + parameter + " (recursive)")
         subprocess.call(
-            [path + "/rfid_trigger_play.sh -d='" + parameter + "' -v=recursive"],
-            shell=True,
+            [path + "/rfid_trigger_play.sh", "-d=" + parameter, "-v=recursive"]
         )
 
     # all the other known commands w/o param
     elif command in arAvailableCommands:
         print(" --> Sending command " + command + " to playout_controls.sh")
-        subprocess.call([path + "/playout_controls.sh -c=" + command], shell=True)
+        subprocess.call([path + "/playout_controls.sh", "-c=" + command])
 
     # all the other known commands /w param
     elif command in arAvailableCommandsWithParam:
@@ -291,8 +441,7 @@ def processCmd(command, parameter):
             + " to playout_controls.sh"
         )
         subprocess.call(
-            [path + "/playout_controls.sh -c=" + command + " -v=" + parameter],
-            shell=True,
+            [path + "/playout_controls.sh", "-c=" + command, "-v=" + parameter]
         )
 
     # we don't know this command
@@ -629,17 +778,15 @@ print(
     + " on port "
     + str(config.get("mqttPort"))
 )
-client.connect(
+# connect_async + loop_start: paho keeps retrying if the broker is not
+# reachable yet (e.g. at boot) or goes away later (e.g. Home Assistant update)
+client.reconnect_delay_set(min_delay=1, max_delay=60)
+client.connect_async(
     config.get("mqttHostname"),
     config.get("mqttPort"),
     config.get("mqttConnectionTimeout"),
 )
-
-# subscribe to topics
-print("Subscribing to " + config.get("mqttBaseTopic") + "/cmd/#")
-client.subscribe(config.get("mqttBaseTopic") + "/cmd/#")
-print("Subscribing to " + config.get("mqttBaseTopic") + "/get/#")
-client.subscribe(config.get("mqttBaseTopic") + "/get/#")
+print("Subscribing to " + config.get("mqttBaseTopic") + "/cmd/# and /get/# once connected")
 
 # register thread for watchForNewCard
 tWatchForNewCard = Thread(target=watchForNewCard)

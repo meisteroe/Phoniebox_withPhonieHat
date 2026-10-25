@@ -1,0 +1,12 @@
+{
+  "mqttHostname": "homeassistant.local",
+  "mqttPort": 1883,
+  "mqttUsername": "phoniebox",
+  "mqttPassword": "CHANGE_ME",
+  "mqttCA": "",
+  "mqttCert": "",
+  "mqttKey": "",
+  "mqttBaseTopic": "auto",
+  "mqttClientId": "auto",
+  "homeAssistantDiscovery": true
+}
