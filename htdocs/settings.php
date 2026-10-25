@@ -63,6 +63,9 @@ if($debug == "true") {
         <a href="#webInterface" class="xbtn xbtn-default ">
         <i class='mdi mdi-cards-outline'></i> <?php print $lang['settingsWebInterface']; ?>
         </a>  |
+        <a href="#mqttAnchor" class="xbtn xbtn-default ">
+        <i class='mdi mdi-home-automation'></i> Smart Home
+        </a>  |
         <a href="#externalInterfaces" class="xbtn xbtn-default ">
         <i class='mdi mdi-usb'></i> <?php print $lang['globalExternalInterfaces']; ?>
         </a>  |
@@ -442,6 +445,22 @@ include("inc.setWlanIpRead.php");
 include("inc.setWebUI.php");
 ?>
 
+      </div><!-- /.panel-body -->
+  </div><!-- /.panel -->
+</div><!-- /.panel-group -->
+
+<div class="panel-group">
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      <h4 class="panel-title"><a name="mqttAnchor"></a>
+        <i class='mdi mdi-home-automation'></i> Smart Home (MQTT / Home Assistant)
+      </h4>
+    </div><!-- /.panel-heading -->
+
+      <div class="panel-body">
+<?php
+include("inc.setMqtt.php");
+?>
       </div><!-- /.panel-body -->
   </div><!-- /.panel -->
 </div><!-- /.panel-group -->

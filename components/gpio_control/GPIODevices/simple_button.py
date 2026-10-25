@@ -10,6 +10,21 @@ map_pull_parse = {'pull_up': GPIO.PUD_UP, 'pull_down': GPIO.PUD_DOWN, 'pull_off'
 map_edge_print = {GPIO.FALLING: 'falling', GPIO.RISING: 'rising', GPIO.BOTH: 'both'}
 map_pull_print = {GPIO.PUD_UP: 'pull_up', GPIO.PUD_DOWN: 'pull_down', GPIO.PUD_OFF: 'pull_off'}
 
+# Smart Home (MQTT): while the MQTT client has button reporting switched on it
+# creates this flag file; each press then writes the button name for it (tmpfs).
+MQTT_BUTTON_FLAG = '/tmp/phoniebox-mqtt.buttons'
+MQTT_BUTTON_EVENT = '/tmp/phoniebox-button-event'
+
+
+def report_button_press(name):
+    try:
+        import os
+        if name and os.path.exists(MQTT_BUTTON_FLAG):
+            with open(MQTT_BUTTON_EVENT, 'w') as f:
+                f.write(str(name))
+    except Exception as e:
+        logger.debug('MQTT button report failed: {}'.format(e))
+
 
 def parse_edge_key(edge):
     if edge in [GPIO.FALLING, GPIO.RISING, GPIO.BOTH]:
@@ -134,6 +149,7 @@ class SimpleButton:
 
     def _handleCallbackFunction(self, *args):
         logger.info('{}: handleCallbackFunction, mode: {}'.format(self.name, self.hold_mode))
+        report_button_press(self.name)
 
         if self.hold_mode == "Repeat":
             # Instantly call primary action

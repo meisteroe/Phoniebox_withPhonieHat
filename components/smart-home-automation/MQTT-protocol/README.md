@@ -129,6 +129,9 @@ Sending empty payload to `phoniebox/cmd/help` will be responded by a list of all
 
 # Quick setup for Home Assistant (this fork)
 
+**Easiest way: WebUI → Settings → "Smart Home (MQTT / Home Assistant)".** There you can switch the service on/off (off = no process, no battery use), enter broker/user/password, choose what is sent (cards: all / only function cards / none, button presses, status with interval, remote control) and edit the list of function cards. Missing Python packages can be installed from there with one click. The manual steps below do the same.
+
+
 The daemon can run directly from this folder and announces itself to Home Assistant via MQTT discovery (sensors, volume sliders, sleep timers, buttons, and every swiped card as a Home Assistant *tag*).
 
 1. In Home Assistant: install the *Mosquitto broker* add-on, enable the MQTT integration and create a local, non-admin user (e.g. `phoniebox`).

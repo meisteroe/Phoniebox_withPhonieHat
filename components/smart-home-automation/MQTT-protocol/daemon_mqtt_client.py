@@ -34,10 +34,15 @@ config = {
     "mqttCert": "/home/pi/MQTT/mqtt-client-phoniebox.crt",  # path to client certificate for certificate-based authentication
     "mqttKey": "/home/pi/MQTT/mqtt-client-phoniebox.key",  # path to client keyfile for certificate-based authentication
     "mqttConnectionTimeout": 60,  # in seconds; timeout for MQTT connection
-    "refreshIntervalPlaying": 5,  # in seconds; how often should the status be sent to MQTT (while playing)
-    "refreshIntervalIdle": 30,  # in seconds; how often should the status be sent to MQTT (when NOT playing)
+    "refreshIntervalPlaying": 10,  # in seconds; how often should the status be sent to MQTT (while playing)
+    "refreshIntervalIdle": 60,  # in seconds; how often should the status be sent to MQTT (when NOT playing)
     "homeAssistantDiscovery": False,  # publish Home Assistant MQTT discovery configs
     "homeAssistantDiscoveryPrefix": "homeassistant",
+    # what to send / accept (all switchable in the WebUI, settings page "Smart Home")
+    "sendStatus": True,  # periodically send title, volume, timers, ... (off = least CPU)
+    "sendCards": "all",  # "all" | "function" (only cards from settings/Function_Cards) | "none"
+    "sendButtons": False,  # send GPIO button presses
+    "acceptCommands": True,  # allow remote control via <base>/cmd/...
 }
 
 
@@ -148,19 +153,85 @@ def watchForNewCard():
                 # fetch card ID
                 cardid = readfile(path + "/../settings/Latest_RFID")
 
-                # publish event "card_swiped"
-                client.publish(
-                    config.get("mqttBaseTopic") + "/event/card_swiped", payload=cardid
-                )
-                print(" --> Publishing event card_swiped = " + cardid)
+                mode = config.get("sendCards")
+                if mode == "all" or (mode == "function" and cardid.upper() in readFunctionCards()):
+                    client.publish(
+                        config.get("mqttBaseTopic") + "/event/card_swiped", payload=cardid
+                    )
+                    print(" --> Publishing event card_swiped = " + cardid)
 
                 # process all attributes
-                processGet("all")
+                if config.get("sendStatus"):
+                    processGet("all")
+
+
+def watchForButtons():
+    """gpio_control writes the button name to BUTTON_EVENT (tmpfs) on each
+    press, but only while BUTTON_FLAG exists."""
+    open(BUTTON_EVENT, "a").close()
+    open(BUTTON_FLAG, "w").close()
+    i = inotify.adapters.Inotify()
+    i.add_watch(BUTTON_EVENT)
+    for event in i.event_gen(yield_nones=False):
+        (e_header, e_type_names, e_path, e_filename) = event
+        if "IN_CLOSE_WRITE" in e_type_names:
+            name = readfile(BUTTON_EVENT)
+            if name:
+                client.publish(config.get("mqttBaseTopic") + "/event/button", payload=name)
+                print(" --> Publishing event button = " + name)
+
+
+def gpioButtonNames():
+    """Names of enabled buttons from gpio_settings.ini (for HA device triggers)."""
+    import configparser
+    names = []
+    try:
+        cp = configparser.ConfigParser(inline_comment_prefixes=(";", "#"))
+        cp.read(path + "/../settings/gpio_settings.ini")
+        for sec in cp.sections():
+            if cp[sec].get("enabled", "False").strip().lower() == "true":
+                names.append(sec)
+    except Exception as e:
+        print("Could not read gpio_settings.ini:", e)
+    return names
+
+
+STATUS_FILE = "/tmp/phoniebox-mqtt.status"
+BUTTON_FLAG = "/tmp/phoniebox-mqtt.buttons"  # exists => gpio_control reports presses
+BUTTON_EVENT = "/tmp/phoniebox-button-event"
+
+
+lastStatus = ""
+
+
+def writeStatus(state, detail=""):
+    global lastStatus
+    lastStatus = state
+    try:
+        with open(STATUS_FILE, "w") as f:
+            json.dump({"state": state, "detail": detail, "host": config.get("mqttHostname"),
+                       "topic": config.get("mqttBaseTopic"), "time": int(time.time())}, f)
+    except Exception:
+        pass
+
+
+def readFunctionCards():
+    cards = set()
+    try:
+        with open(path + "/../settings/Function_Cards") as f:
+            for line in f:
+                card = line.split("#", 1)[0].strip().upper()
+                if card:
+                    cards.add(card)
+    except Exception:
+        pass
+    return cards
 
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print("Connection established.")
+        writeStatus("connected")
 
         # retrieve server version and edition
         version = readfile(path + "/../settings/version")
@@ -199,7 +270,8 @@ def on_connect(client, userdata, flags, rc):
         )
 
         # (re)subscribe here so subscriptions survive reconnects
-        client.subscribe(config.get("mqttBaseTopic") + "/cmd/#")
+        if config.get("acceptCommands"):
+            client.subscribe(config.get("mqttBaseTopic") + "/cmd/#")
         client.subscribe(config.get("mqttBaseTopic") + "/get/#")
 
         if config.get("homeAssistantDiscovery"):
@@ -213,11 +285,18 @@ def on_connect(client, userdata, flags, rc):
 
     else:
         print("Connection could NOT be established. Return-Code:", rc)
+        reasons = {1: "Protokollversion abgelehnt", 2: "Client-ID abgelehnt", 3: "Server nicht verfuegbar",
+                   4: "Benutzername oder Passwort falsch",
+                   5: "nicht berechtigt \u2013 Benutzername oder Passwort falsch?"}
+        writeStatus("error", reasons.get(rc, "Fehlercode " + str(rc)))
 
 
 def on_disconnect(client, userdata, rc):
     # paho reconnects automatically as long as the network loop keeps running
     print("Disconnected. Return-Code:", str(rc))
+    # keep the more helpful reason from on_connect (e.g. wrong password)
+    if lastStatus != "error":
+        writeStatus("disconnected", "Verbindung getrennt, neuer Versuch laeuft")
 
 
 def publishHomeAssistantDiscovery():
@@ -324,14 +403,22 @@ def publishHomeAssistantDiscovery():
         "command_topic": cmd("playfolder"), "max": 255,
     }))
 
+    published = 0
     for component, key, e in entities:
+        topic = prefix + "/" + component + "/" + node + "/" + key + "/config"
+        is_status = component == "sensor"
+        is_control = component in ("number", "button", "text")
+        wanted = (not is_status or config.get("sendStatus")) and (not is_control or config.get("acceptCommands"))
+        if component == "number" and not config.get("sendStatus"):
+            wanted = False  # a slider without state makes no sense
+        if not wanted:
+            client.publish(topic, payload="", qos=1, retain=True)  # remove from HA
+            continue
         e.update(common)
         e["unique_id"] = node + "_" + key
         e["object_id"] = node + "_" + key
-        client.publish(
-            prefix + "/" + component + "/" + node + "/" + key + "/config",
-            payload=json.dumps(e), qos=1, retain=True,
-        )
+        client.publish(topic, payload=json.dumps(e), qos=1, retain=True)
+        published += 1
 
     # every swiped card becomes a Home Assistant "tag" (Settings -> Tags)
     client.publish(
@@ -340,10 +427,23 @@ def publishHomeAssistantDiscovery():
             "topic": base + "/event/card_swiped",
             "value_template": "{{ value }}",
             "device": device,
-        }),
+        }) if config.get("sendCards") != "none" else "",
         qos=1, retain=True,
     )
-    print("Published Home Assistant discovery for " + str(len(entities)) + " entities")
+
+    # GPIO buttons become device triggers ("Phoniebox: <Taste> gedrueckt")
+    for name in gpioButtonNames():
+        key = "btn_" + re.sub(r"[^a-zA-Z0-9_]", "_", name)
+        topic = prefix + "/device_automation/" + node + "/" + key + "/config"
+        if config.get("sendButtons"):
+            client.publish(topic, payload=json.dumps({
+                "automation_type": "trigger", "topic": base + "/event/button",
+                "payload": name, "type": "button_short_press", "subtype": name,
+                "device": device,
+            }), qos=1, retain=True)
+        else:
+            client.publish(topic, payload="", qos=1, retain=True)
+    print("Published Home Assistant discovery for " + str(published) + " entities")
 
 
 def on_log(client, userdata, level, buf):
@@ -821,8 +921,22 @@ tWatchForNewCard = Thread(target=watchForNewCard)
 tWatchForNewCard.setDaemon(True)
 tWatchForNewCard.start()
 
+# button events (only while switched on; flag tells gpio_control to report)
+if config.get("sendButtons"):
+    tWatchForButtons = Thread(target=watchForButtons)
+    tWatchForButtons.daemon = True
+    tWatchForButtons.start()
+elif os.path.exists(BUTTON_FLAG):
+    os.remove(BUTTON_FLAG)
+
+writeStatus("connecting")
+
 # start endless loop
 client.loop_start()
 while True:
-    processGet("all")
-    time.sleep(refreshInterval)
+    if config.get("sendStatus"):
+        processGet("all")
+        time.sleep(refreshInterval)
+    else:
+        # nothing to poll: card/button events and commands arrive via threads
+        time.sleep(3600)
